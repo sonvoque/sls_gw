@@ -24,6 +24,8 @@ author Vo Que Son <sonvq@hcmut.edu.vn>
 #define MAXBUF  sizeof(cmd_struct_t)
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
+#define clear() printf("\033[H\033[J")
+
 static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
 static  int     rev_sin6len;
@@ -88,7 +90,7 @@ void print_cmd(cmd_struct_t command) {
     printf("seq=%02d; ",command.seq);
     printf("type=0x%02X; ",command.type);
     printf("cmd=0x%02X; ",command.cmd);
-    printf("err_code=0x%02X; \n",command.err_code); 
+    printf("err_code=0x%04X; \n",command.err_code); 
     printf("data=[");
     for (i=0;i<MAX_CMD_DATA_LEN;i++) 
         printf("0x%02X,",command.arg[i]);
@@ -157,6 +159,8 @@ int main(int argc, char* argv[]) {
 		perror("bind failed");
 		return 0;
 	}
+
+    clear();
     for (;;) {
 		printf("\nGateway is waiting on port %d for commands\n", SERVICE_PORT);
 		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
@@ -251,15 +255,15 @@ void ip6_send_cmd(int nodeid, int port) {
     /*wait for a reply */
     fd.fd = sock;
     fd.events = POLLIN;
-    res = poll(&fd, 1, 30000); // 3s timeout
+    res = poll(&fd, 1, 20000); // 3s timeout
     if (res == 0)   {
-        printf("Time-out: GW forwarding command \n");
+        printf(" - Time-out: GW forwarding command \n");
         rx_reply = tx_cmd;
         rx_reply.err_code = ERR_TIME_OUT;
         rx_reply.type = MSG_TYPE_REP;
     }
     else if (res == -1) {
-        printf("ERROR: GW forwarding command \n");
+        printf(" - ERROR: GW forwarding command \n");
     }
     else{
         // implies (fd.revents & POLLIN) != 0
