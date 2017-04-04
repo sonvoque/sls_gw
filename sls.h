@@ -12,7 +12,7 @@
 #ifndef SLS_H_
 #define SLS_H_
 
-//#define IEEE802154_CONF_PANID		0xCAFE
+//#define IEEE802154_CONF_PANID		0xABCD
 #define SLS_PAN_ID	 IEEE802154_CONF_PANID
 
 
@@ -32,7 +32,7 @@ enum {
 SLS_CC2538DK_HW = 1 : for compiling to CC2538dk
 SLS_CC2538DK_HW = 0 : for compiling to SKY used in Cooja simulation
 */
-#define SLS_CC2538DK_HW		0
+#define SLS_CC2538DK_HW		1
 
 
 #if (SLS_CC2538DK_HW)
@@ -72,20 +72,26 @@ enum {
 
 enum {
 	//command id
-	CMD_LED_OFF				= 0x01,
-	CMD_LED_ON				= 0x02,
-	CMD_LED_DIM				= 0x03,
-	CMD_GET_LED_STATUS 		= 0x04,
-	CMD_GET_NW_STATUS 		= 0x05,
-	CMD_GET_GW_STATUS 		= 0x06,
-	CMD_TIMER_ON 			= 0x07,
-	CMD_TIMER_OFF 			= 0x08,
-	CMD_SET_APP_KEY			= 0x09,
-	CMD_GET_APP_KEY			= 0x0A,
-	CMD_LED_HELLO 			= 0x0B,
-	CMD_LED_REBOOT			= 0x0C,
-	CMD_REPAIR_ROUTE		= 0x0D,
-	CMD_GW_HELLO			= 0x0E,
+	CMD_GET_LED_STATUS 		= 0xFF,
+	CMD_GET_NW_STATUS 		= 0xFE,
+	CMD_GET_GW_STATUS 		= 0xFD,
+	CMD_GW_HELLO			= 0xFC,
+	CMD_GW_SHUTDOWN			= 0xFB,
+	CMD_GW_TURN_ON_ALL		= 0xFA,
+	CMD_GW_TURN_OFF_ALL		= 0xF9,
+	CMD_GW_DIM_ALL			= 0xF8,
+
+	CMD_LED_OFF				= 0xF7,
+	CMD_LED_ON				= 0xF6,
+	CMD_LED_DIM				= 0xF5,
+	CMD_LED_HELLO 			= 0xF4,
+	CMD_TIMER_ON 			= 0xF3,
+	CMD_TIMER_OFF 			= 0xF2,
+	CMD_SET_APP_KEY			= 0xF1,
+	CMD_GET_APP_KEY			= 0xF0,
+	CMD_LED_REBOOT			= 0xEF,
+	CMD_REPAIR_ROUTE		= 0xEE,
+
 };
 
 enum {

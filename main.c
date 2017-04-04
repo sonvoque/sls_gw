@@ -25,6 +25,7 @@ author Vo Que Son <sonvq@hcmut.edu.vn>
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
+#define TIME_OUT    5      //seconds
 
 static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
@@ -36,7 +37,6 @@ static  char    str_port[5];
 static  char    cmd[20];
 static  char    arg[32];
 
-struct timeval timeout={2,0}; //set timeout for 2 seconds
 struct pollfd fd;
 int res;
 
@@ -50,7 +50,6 @@ static  char    dst_ipv6addr_list[20][50] ={"aaaa::212:4b00:5af:8406",
 											"aaaa::212:4b00:5af:84dd",
                                             "aaaa::212:4b00:5a9:8ff2",
                                             "aaaa::212:4b00:5a9:8f91", 
-                                            "aaaa::212:7402:2:202",                                 
                                                                     };
 
 static  cmd_struct_t  tx_cmd, rx_reply;
@@ -75,10 +74,10 @@ float elapsed;
 /*------------------------------------------------*/
 void prepare_cmd() {
     tx_cmd.sfd = SFD;
-    tx_cmd.len = sizeof(tx_cmd);
     tx_cmd.seq ++;
-    //tx_cmd.type = MSG_TYPE_REQ;
     tx_cmd.err_code = 0;  
+    //tx_cmd.len = sizeof(tx_cmd);
+    //tx_cmd.type = MSG_TYPE_REQ;
 }
 
 
@@ -179,7 +178,23 @@ int main(int argc, char* argv[]) {
             rx_reply.type = MSG_TYPE_REP;
         }
         else if (pi_cmdPtr->cmd==CMD_GET_GW_STATUS) {
-            printf(" - Command Analysis: received CGW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            rx_reply.type = MSG_TYPE_REP;
+        }
+        else if (pi_cmdPtr->cmd==CMD_GW_SHUTDOWN) {
+            printf(" - Command Analysis: received CW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            rx_reply.type = MSG_TYPE_REP;
+        }
+        else if (pi_cmdPtr->cmd==CMD_GW_TURN_ON_ALL) {
+            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            rx_reply.type = MSG_TYPE_REP;
+        }
+        else if (pi_cmdPtr->cmd==CMD_GW_TURN_OFF_ALL) {
+            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            rx_reply.type = MSG_TYPE_REP;
+        }
+        else if (pi_cmdPtr->cmd==CMD_GW_DIM_ALL) {
+            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
             rx_reply.type = MSG_TYPE_REP;
         }
         else {  // not command for GW: send to node and wait for a reply
@@ -249,13 +264,13 @@ void ip6_send_cmd(int nodeid, int port) {
         printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s  ....done\n",status, dst_ipv6addr,str_port);        
     }
     else {
-        printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s  ....ERROR\n",status, dst_ipv6addr,str_port);  
+        printf("\n2. Forward REQUEST to [%s]:%s  ....ERROR\n",dst_ipv6addr,str_port);  
     }    
 
     /*wait for a reply */
     fd.fd = sock;
     fd.events = POLLIN;
-    res = poll(&fd, 1, 20000); // 3s timeout
+    res = poll(&fd, 1, TIME_OUT*1000); // timeout
     if (res == 0)   {
         printf(" - Time-out: GW forwarding command \n");
         rx_reply = tx_cmd;
