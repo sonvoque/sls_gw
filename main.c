@@ -25,7 +25,7 @@ author Vo Que Son <sonvq@hcmut.edu.vn>
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    5      //seconds
+#define TIME_OUT    3      //seconds
 
 static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
@@ -43,13 +43,13 @@ int res;
 static  char    dst_ipv6addr_list[20][50] ={"aaaa::212:4b00:5af:8406",
 											"aaaa::212:4b00:5af:8570",
                                             "aaaa::212:4b00:5a9:8f83",
-                                            "aaaa::212:4b00:5a9:8fd5",                                              
-											"aaaa::212:4b00:5af:83f8",
+                                            "aaaa::212:4b00:5a9:8fd5",
+                                            "aaaa::212:4b00:5af:83f8",
 											"aaaa::212:4b00:5af:851f",
 											"aaaa::212:4b00:5af:8422",
 											"aaaa::212:4b00:5af:84dd",
                                             "aaaa::212:4b00:5a9:8ff2",
-                                            "aaaa::212:4b00:5a9:8f91", 
+                                            "aaaa::212:4b00:5a9:8f91",
                                                                     };
 
 static  cmd_struct_t  tx_cmd, rx_reply;
@@ -64,27 +64,78 @@ static  char *pi_p;
 /*prototype definition */
 static void print_cmd();
 static void prepare_cmd();
-static	uint8_t node_id;
+static	int node_id, num_of_node, timeout_val;
+
+static int read_node_list();
+static void run_node_discovery();
+static int ip6_send_cmd (int nodeid, int port);
+static void init_main();
 
 struct timeval t0;
 struct timeval t1;
 float elapsed;
 
 
+void init_main() {
+    timeout_val = TIME_OUT;
+}
+/*------------------------------------------------*/
+int read_node_list(){
+int     node;
+char    ipv6_addr[50];
+   
+FILE *ptr_file;
+char buf[1000];
+
+    num_of_node = 0;
+    ptr_file =fopen("node_list.txt","r");
+    if (!ptr_file)
+        return 1;
+
+    while (fgets(buf,1000, ptr_file)!=NULL) {
+        sscanf(buf,"%d %s",&node, ipv6_addr);
+        strcpy(dst_ipv6addr_list[node], ipv6_addr);
+        //printf("node = %d,   ipv6 = %s\n",node, dst_ipv6addr_list[node]);
+        num_of_node++;
+    }
+    fclose(ptr_file);
+
+    printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
+    return 0;
+}
+
+/*------------------------------------------------*/
+static void run_node_discovery(){
+int res, i;
+    
+    printf("II. RUNNING DISCOVERY PROCESS.....\n");
+    for (i = 0; i < num_of_node; i++) {
+        tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.cmd = CMD_RF_HELLO;
+        tx_cmd.err_code = 0;
+        res = ip6_send_cmd(i, SLS_NORMAL_PORT);
+        if (res == 0)   {
+            printf(" - Node %d [%s] unavailable\n", i, dst_ipv6addr_list[i]);
+        }
+        else if (res == -1) {
+            printf(" - ERROR: discovery process \n");
+        }
+        else{
+            printf(" - Node %d [%s] available\n", i, dst_ipv6addr_list[i]);   
+        }
+    }
+}
 /*------------------------------------------------*/
 void prepare_cmd() {
     tx_cmd.sfd = SFD;
     tx_cmd.seq ++;
-    tx_cmd.err_code = 0;  
-    //tx_cmd.len = sizeof(tx_cmd);
-    //tx_cmd.type = MSG_TYPE_REQ;
 }
 
 
 /*------------------------------------------------*/
 void print_cmd(cmd_struct_t command) {
     int i;
-    printf("SFD=0x%02X; ",command.sfd);
+    printf("\nSFD=0x%02X; ",command.sfd);
     printf("node_id=%02d; ",command.len);
     printf("seq=%02d; ",command.seq);
     printf("type=0x%02X; ",command.type);
@@ -92,7 +143,7 @@ void print_cmd(cmd_struct_t command) {
     printf("err_code=0x%04X; \n",command.err_code); 
     printf("data=[");
     for (i=0;i<MAX_CMD_DATA_LEN;i++) 
-        printf("0x%02X,",command.arg[i]);
+        printf("%02X,",command.arg[i]);
     printf("]\n");
 }  
 
@@ -124,7 +175,7 @@ int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max) 
     return byte_array_size;
 }
 
-void ip6_send_cmd (int nodeid, int port);
+
 
 float timedifference_msec(struct timeval t0, struct timeval t1){
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
@@ -134,6 +185,8 @@ float timedifference_msec(struct timeval t0, struct timeval t1){
 int main(int argc, char* argv[]) {
 //-------------------------------------------------------------------------------------------
 // Khoi tao socket cho server de nhan du lieu
+    init_main();
+
     struct sockaddr_in pi_myaddr;	/* our address */
 	struct sockaddr_in pi_remaddr;	/* remote address */
 	socklen_t pi_addrlen = sizeof(pi_remaddr);		/* length of addresses */
@@ -160,8 +213,13 @@ int main(int argc, char* argv[]) {
 	}
 
     clear();
-    for (;;) {
-		printf("\nGateway is waiting on port %d for commands\n", SERVICE_PORT);
+    /* read node list*/
+    read_node_list();
+    /* running discovery */
+    run_node_discovery();
+
+    for (;;) {        
+		printf("\nIII. GW WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
 		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
 		if (pi_recvlen > 0) {
 			printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
@@ -176,6 +234,11 @@ int main(int argc, char* argv[]) {
         if (pi_cmdPtr->cmd==CMD_GW_HELLO) {
             printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
             rx_reply.type = MSG_TYPE_REP;
+        }
+        if (pi_cmdPtr->cmd==CMD_GW_SET_TIMEOUT) {
+            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+            rx_reply.type = MSG_TYPE_REP;
+            timeout_val = (*pi_cmdPtr).arg[0];
         }
         else if (pi_cmdPtr->cmd==CMD_GET_GW_STATUS) {
             printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
@@ -201,7 +264,7 @@ int main(int argc, char* argv[]) {
             printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
             tx_cmd = *pi_cmdPtr;
             gettimeofday(&t0, 0);
-            ip6_send_cmd(node_id, 3000);
+            ip6_send_cmd(node_id, SLS_NORMAL_PORT);
 			gettimeofday(&t1, 0);
             elapsed = timedifference_msec(t0, t1);
             printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
@@ -219,7 +282,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void ip6_send_cmd(int nodeid, int port) {
+int ip6_send_cmd(int nodeid, int port) {
     int sock;
     int status, i;
     struct addrinfo sainfo, *psinfo;
@@ -232,9 +295,11 @@ void ip6_send_cmd(int nodeid, int port) {
     sin6len = sizeof(struct sockaddr_in6);
 
     print_cmd(tx_cmd);
-    strcpy(dst_ipv6addr,dst_ipv6addr_list[node_id]);
+    strcpy(dst_ipv6addr,dst_ipv6addr_list[nodeid]);
     sprintf(str_port,"%d",port);
-  
+
+
+    //printf("ipv6_send: node = %d, ipv6= %s\n",nodeid, dst_ipv6addr);  
     prepare_cmd();
 
     strtok(buffer, "\n");
@@ -270,7 +335,7 @@ void ip6_send_cmd(int nodeid, int port) {
     /*wait for a reply */
     fd.fd = sock;
     fd.events = POLLIN;
-    res = poll(&fd, 1, TIME_OUT*1000); // timeout
+    res = poll(&fd, 1, timeout_val*1000); // timeout
     if (res == 0)   {
         printf(" - Time-out: GW forwarding command \n");
         rx_reply = tx_cmd;
@@ -297,4 +362,5 @@ void ip6_send_cmd(int nodeid, int port) {
     // free memory
     freeaddrinfo(psinfo);
     psinfo = NULL;
+    return res;
 }
