@@ -70,6 +70,8 @@ static int read_node_list();
 static void run_node_discovery();
 static int ip6_send_cmd (int nodeid, int port);
 static void init_main();
+static bool is_cmd_of_gw(cmd_struct_t cmd);
+static void process_gw_cmd(cmd_struct_t cmd);
 
 struct timeval t0;
 struct timeval t1;
@@ -177,8 +179,55 @@ int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max) 
 
 
 
+/*------------------------------------------------*/
 float timedifference_msec(struct timeval t0, struct timeval t1){
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
+}
+
+
+/*------------------------------------------------*/
+bool is_cmd_of_gw(cmd_struct_t cmd) {
+    return (cmd.cmd==CMD_GET_GW_STATUS) ||
+            (cmd.cmd==CMD_GW_HELLO) ||
+            (cmd.cmd==CMD_GW_SHUTDOWN) ||
+            (cmd.cmd==CMD_GW_TURN_ON_ALL) ||
+            (cmd.cmd==CMD_GW_TURN_OFF_ALL) ||
+            (cmd.cmd==CMD_GW_DIM_ALL) ||            
+            (cmd.cmd==CMD_GW_SET_TIMEOUT);
+}
+
+/*------------------------------------------------*/
+void process_gw_cmd(cmd_struct_t cmd) {
+    switch (cmd.cmd) {
+        case CMD_GW_HELLO:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+        
+        case CMD_GW_SET_TIMEOUT:
+            rx_reply.type = MSG_TYPE_REP;
+            timeout_val = (*pi_cmdPtr).arg[0];
+            break;
+        
+        case CMD_GET_GW_STATUS:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+        
+        case CMD_GW_SHUTDOWN:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+        
+        case CMD_GW_TURN_ON_ALL:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+        
+        case CMD_GW_TURN_OFF_ALL:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+        
+        case CMD_GW_DIM_ALL:
+            rx_reply.type = MSG_TYPE_REP;
+            break;
+    }
 }
 
 
@@ -219,7 +268,7 @@ int main(int argc, char* argv[]) {
     run_node_discovery();
 
     for (;;) {        
-		printf("\nIII. GW WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+		printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
 		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
 		if (pi_recvlen > 0) {
 			printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
@@ -231,34 +280,9 @@ int main(int argc, char* argv[]) {
         rx_reply = *pi_cmdPtr;
 
 		gettimeofday(&t0, 0);
-        if (pi_cmdPtr->cmd==CMD_GW_HELLO) {
+        if (is_cmd_of_gw(*pi_cmdPtr)==true) {
             printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-        }
-        if (pi_cmdPtr->cmd==CMD_GW_SET_TIMEOUT) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-            timeout_val = (*pi_cmdPtr).arg[0];
-        }
-        else if (pi_cmdPtr->cmd==CMD_GET_GW_STATUS) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-        }
-        else if (pi_cmdPtr->cmd==CMD_GW_SHUTDOWN) {
-            printf(" - Command Analysis: received CW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-        }
-        else if (pi_cmdPtr->cmd==CMD_GW_TURN_ON_ALL) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-        }
-        else if (pi_cmdPtr->cmd==CMD_GW_TURN_OFF_ALL) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
-        }
-        else if (pi_cmdPtr->cmd==CMD_GW_DIM_ALL) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            rx_reply.type = MSG_TYPE_REP;
+            process_gw_cmd(*pi_cmdPtr);
         }
         else {  // not command for GW: send to node and wait for a reply
             printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
@@ -298,12 +322,10 @@ int ip6_send_cmd(int nodeid, int port) {
     strcpy(dst_ipv6addr,dst_ipv6addr_list[nodeid]);
     sprintf(str_port,"%d",port);
 
-
     //printf("ipv6_send: node = %d, ipv6= %s\n",nodeid, dst_ipv6addr);  
     prepare_cmd();
 
     strtok(buffer, "\n");
-
     sock = socket(PF_INET6, SOCK_DGRAM,0);
 
     memset(&sin6, 0, sizeof(struct sockaddr_in6));
