@@ -72,7 +72,6 @@ enum {
 
 enum {
 	//command id
-	CMD_GET_LED_STATUS 		= 0xFF,
 	CMD_GET_NW_STATUS 		= 0xFE,
 	CMD_GET_GW_STATUS 		= 0xFD,
 	CMD_GW_HELLO			= 0xFC,
@@ -81,16 +80,17 @@ enum {
 	CMD_GW_TURN_OFF_ALL		= 0xF9,
 	CMD_GW_DIM_ALL			= 0xF8,
 
-	CMD_LED_OFF				= 0xF7,
-	CMD_LED_ON				= 0xF6,
-	CMD_LED_DIM				= 0xF5,
-	CMD_LED_HELLO 			= 0xF4,
-	CMD_TIMER_ON 			= 0xF3,
-	CMD_TIMER_OFF 			= 0xF2,
+	CMD_GET_RF_STATUS 		= 0xFF,
+	CMD_RF_LED_OFF			= 0xF7,
+	CMD_RF_LED_ON			= 0xF6,
+	CMD_RF_LED_DIM			= 0xF5,
+	CMD_RF_HELLO 			= 0xF4,
+	CMD_RF_TIMER_ON 		= 0xF3,
+	CMD_RF_TIMER_OFF 		= 0xF2,
 	CMD_SET_APP_KEY			= 0xF1,
 	CMD_GET_APP_KEY			= 0xF0,
-	CMD_LED_REBOOT			= 0xEF,
-	CMD_REPAIR_ROUTE		= 0xEE,
+	CMD_RF_REBOOT			= 0xEF,
+	CMD_RF_REPAIR_ROUTE		= 0xEE,
 
 };
 
