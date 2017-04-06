@@ -1,1 +1,3 @@
-/home/user/contiki/examples/cc2538dk/02_gw/main &
+#!bin/sh
+
+/home/ubuntu/gw/main &

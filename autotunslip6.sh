@@ -1,4 +1,4 @@
 #!/bin/sh
 
-cd /home/user/contiki/tools/
-sudo /home/user/contiki/tools/tunslip6 -B 115200 -s /dev/ttyUSB0 aaaa::1/64
+cd /home/ubuntu/contiki/tools/
+sudo /home/ubuntu/contiki/tools/tunslip6 -B 115200 -s /dev/ttyUSB0 aaaa::1/64
