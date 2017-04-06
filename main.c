@@ -1,6 +1,7 @@
 /*
-Shell cmd for controlling the SLS
+Gateway software for controlling the SLS
 author Vo Que Son <sonvq@hcmut.edu.vn>
+compile: gcc -o main main.c $(mysql_config --libs --cflags)
 */
 //#include <mysql.h> 
 #include <stdio.h>
@@ -69,6 +70,7 @@ static void process_gw_cmd(cmd_struct_t cmd);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb);
 static void execute_sql_cmd(char *sql);
+static  void show_sql_db();
 
 struct timeval t0;
 struct timeval t1;
@@ -87,7 +89,7 @@ void finish_with_error(MYSQL *con) {
 /*------------------------------------------------*/
 void init_main() {
     timeout_val = TIME_OUT;
-
+    show_sql_db();
 }
 
 /*------------------------------------------------*/
@@ -102,8 +104,43 @@ void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb) {
     nodedb->last_cmd    = atoi(row[7]);
 
     strcpy(dst_ipv6addr_list[nodedb->id], nodedb->ipv6_addr);
-    printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
-        nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
+    //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
+    //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
+}
+
+void show_sql_db() {
+    con = mysql_init(NULL);
+    if (con == NULL) {
+      finish_with_error(con);
+    }    
+    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
+        finish_with_error(con);
+    }  
+
+    if (mysql_query(con, "SELECT * FROM sls_db")) {
+        finish_with_error(con);
+    }
+  
+    MYSQL_RES *result = mysql_store_result(con);
+    if (result == NULL) {
+        finish_with_error(con);
+    }
+
+    int num_fields = mysql_num_fields(result);
+
+    MYSQL_ROW row;
+    while ((row = mysql_fetch_row(result)))  { 
+        for(int i = 0; i < num_fields; i++) {
+            if (i==2)
+                printf("%25s | ", row[i] ? row[i] : "NULL");
+            else
+                printf("%5s | ", row[i] ? row[i] : "NULL");
+        }
+        printf("\n");
+    }
+
+    mysql_free_result(result);
+    mysql_close(con);   
 }
 
 /*------------------------------------------------*/
@@ -148,6 +185,7 @@ char buf[1000];
     }
     else {
         printf("Reading DB: sls_db......\n");
+        //show_sql_db();
     }
 
     int num_fields = mysql_num_fields(result);
@@ -165,7 +203,6 @@ char buf[1000];
     printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
 
     mysql_free_result(result);
-
     mysql_close(con);   
 
     return 0;
