@@ -68,12 +68,15 @@ static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb);
+static void execute_sql_cmd(char *sql);
 
 struct timeval t0;
 struct timeval t1;
 float elapsed;
 
 MYSQL *con;
+char *sql_cmd; 
+
 
 void finish_with_error(MYSQL *con) {
   fprintf(stderr, "%s\n", mysql_error(con));
@@ -85,11 +88,6 @@ void finish_with_error(MYSQL *con) {
 void init_main() {
     timeout_val = TIME_OUT;
 
-    con = mysql_init(NULL);
-    printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
-    if (con == NULL) {
-      finish_with_error(con);
-    }    
 }
 
 /*------------------------------------------------*/
@@ -104,8 +102,8 @@ void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb) {
     nodedb->last_cmd    = atoi(row[7]);
 
     strcpy(dst_ipv6addr_list[nodedb->id], nodedb->ipv6_addr);
-    //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
-    //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
+    printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
+        nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
 }
 
 /*------------------------------------------------*/
@@ -132,12 +130,14 @@ char buf[1000];
     fclose(ptr_file);
     */
 
-
-    if (mysql_real_connect(con, "localhost", "root", "Son100480", 
-        "sls_db", 0, NULL, 0) == NULL) {
+    con = mysql_init(NULL);
+    printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
+    if (con == NULL) {
+      finish_with_error(con);
+    }    
+    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
         finish_with_error(con);
     }  
-
     if (mysql_query(con, "SELECT * FROM sls_db")) {
         finish_with_error(con);
     }
@@ -171,10 +171,28 @@ char buf[1000];
     return 0;
 }
 
+
+/*------------------------------------------------*/
+void execute_sql_cmd(char *sql) {
+    con = mysql_init(NULL);
+    if (con == NULL) {
+      finish_with_error(con);
+    }    
+    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
+        finish_with_error(con);
+    }  
+
+    if (mysql_query(con, sql)) {
+        finish_with_error(con);
+    }
+
+    mysql_close(con);   
+}
 /*------------------------------------------------*/
 static void run_node_discovery(){
-int res, i;
-    
+    char sql[200];
+    int res, i;
+
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
     for (i = 1; i < num_of_node; i++) {
         tx_cmd.type = MSG_TYPE_REQ;
@@ -183,14 +201,23 @@ int res, i;
         res = ip6_send_cmd(i, SLS_NORMAL_PORT);
         if (res == 0)   {
             printf(" - Node %d [%s] unavailable\n", i, dst_ipv6addr_list[i]);
+            sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;",i);
+            sql_cmd = sql;
+            printf("sql_cmd = %s\n", sql_cmd);
+            execute_sql_cmd(sql_cmd);
         }
         else if (res == -1) {
             printf(" - ERROR: discovery process \n");
         }
         else{
             printf(" - Node %d [%s] available\n", i, dst_ipv6addr_list[i]);   
+            sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;",i);
+            sql_cmd = sql;
+            printf("sql_cmd = %s\n", sql_cmd);
+            execute_sql_cmd(sql_cmd);
         }
     }
+
 }
 /*------------------------------------------------*/
 void prepare_cmd() {
