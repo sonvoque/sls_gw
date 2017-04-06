@@ -40,7 +40,8 @@ static  char    str_port[5];
 static  char    cmd[20];
 static  char    arg[32];
 
-static node_db_struct_t  node_db;
+static node_db_struct_t node_db;
+static node_db_struct_t node_db_list[100]; 
 
 struct pollfd fd;
 int res;
@@ -68,9 +69,12 @@ static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd);
 static void finish_with_error(MYSQL *con);
-static void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb);
+static void get_db_row(MYSQL_ROW row, int i);
 static void execute_sql_cmd(char *sql);
 static  void show_sql_db();
+static  void show_local_db();
+static  void update_sql_db();
+
 
 struct timeval t0;
 struct timeval t1;
@@ -93,20 +97,42 @@ void init_main() {
 }
 
 /*------------------------------------------------*/
-void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb) {
-    nodedb->index       = atoi(row[0]);
-    nodedb->id          = atoi(row[1]);
-    strcpy(nodedb->ipv6_addr,row[2]);
-    strcpy(nodedb->connected,row[3]);
-    nodedb->rx_cmd      = atoi(row[4]);
-    nodedb->tx_rep      = atoi(row[5]);
-    nodedb->num_timeout = atoi(row[6]);
-    nodedb->last_cmd    = atoi(row[7]);
+void get_db_row(MYSQL_ROW row, int i) {
+    node_db_list[i].index       = atoi(row[0]);
+    node_db_list[i].id          = atoi(row[1]);
+    strcpy(node_db_list[i].ipv6_addr,row[2]);
+    strcpy(node_db_list[i].connected,row[3]);
+    node_db_list[i].rx_cmd      = atoi(row[4]);
+    node_db_list[i].tx_rep      = atoi(row[5]);
+    node_db_list[i].num_timeout = atoi(row[6]);
+    node_db_list[i].last_cmd    = atoi(row[7]);
 
-    strcpy(dst_ipv6addr_list[nodedb->id], nodedb->ipv6_addr);
+    strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
     //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
     //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
 }
+
+
+void update_sql_db() {
+
+}
+
+void show_local_db() {
+    printf("|------------------------LOCAL DATABASE----------------------------|\n");
+    for(int i = 0; i < num_of_node; i++) {
+        if (i>0) 
+            printf("| %02d | %02d | %30s | %s | %02d | %02d | %02d | %02X | \n",node_db_list[i].index , node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
+                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd );  
+        else
+            printf("| %02d | %02d | %30s |*%s | %02d | %02d | %02d | %02X | \n",node_db_list[i].index , node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
+                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd );  
+
+    }
+    printf("|------------------------------------------------------------------|\n");
+}
+
 
 void show_sql_db() {
     con = mysql_init(NULL);
@@ -128,16 +154,20 @@ void show_sql_db() {
 
     int num_fields = mysql_num_fields(result);
 
+    printf("|------------------------------SQL DATABASE-----------------------------------------|\n");
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
         for(int i = 0; i < num_fields; i++) {
-            if (i==2)
+            if (i==0)
+                printf("| %5s | ", row[i] ? row[i] : "NULL");
+            else if (i==2)
                 printf("%25s | ", row[i] ? row[i] : "NULL");
             else
                 printf("%5s | ", row[i] ? row[i] : "NULL");
         }
         printf("\n");
     }
+    printf("|-----------------------------------------------------------------------------------|\n");
 
     mysql_free_result(result);
     mysql_close(con);   
@@ -185,7 +215,6 @@ char buf[1000];
     }
     else {
         printf("Reading DB: sls_db......\n");
-        //show_sql_db();
     }
 
     int num_fields = mysql_num_fields(result);
@@ -195,12 +224,13 @@ char buf[1000];
         //for(int i = 0; i < num_fields; i++)
             //printf("%s ", row[i] ? row[i] : "NULL");
 
+        get_db_row(row, num_of_node);        
         num_of_node++;
-        get_db_row(row, &node_db);        
         //printf("node = %d, ipv6 = %s\n",node_db.id, node_db.ipv6_addr);
     }
   
     printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
+    show_local_db();
 
     mysql_free_result(result);
     mysql_close(con);   
@@ -237,21 +267,21 @@ static void run_node_discovery(){
         tx_cmd.err_code = 0;
         res = ip6_send_cmd(i, SLS_NORMAL_PORT);
         if (res == 0)   {
-            printf(" - Node %d [%s] unavailable\n", i, dst_ipv6addr_list[i]);
+            printf(" - Node %d [%s] unavailable\n", i, node_db_list[i].ipv6_addr);
             sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;",i);
-            sql_cmd = sql;
-            printf("sql_cmd = %s\n", sql_cmd);
-            execute_sql_cmd(sql_cmd);
+            //sql_cmd = sql;
+            printf("sql_cmd = %s\n", sql);
+            execute_sql_cmd(sql);
         }
         else if (res == -1) {
             printf(" - ERROR: discovery process \n");
         }
         else{
-            printf(" - Node %d [%s] available\n", i, dst_ipv6addr_list[i]);   
+            printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
             sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;",i);
-            sql_cmd = sql;
-            printf("sql_cmd = %s\n", sql_cmd);
-            execute_sql_cmd(sql_cmd);
+            //sql_cmd = sql;
+            printf("sql_cmd = %s\n", sql);
+            execute_sql_cmd(sql);
         }
     }
 
@@ -398,6 +428,9 @@ int main(int argc, char* argv[]) {
     run_node_discovery();
 
     for (;;) {        
+        
+        show_local_db();
+
 		printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
 		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
 		if (pi_recvlen > 0) {
@@ -422,6 +455,9 @@ int main(int argc, char* argv[]) {
 			gettimeofday(&t1, 0);
             elapsed = timedifference_msec(t0, t1);
             printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+            /*update local DB */
+            node_db_list[node_id].rx_cmd++;
+            node_db_list[node_id].last_cmd = tx_cmd.cmd;
         }
 	}
 	else
@@ -449,7 +485,7 @@ int ip6_send_cmd(int nodeid, int port) {
     sin6len = sizeof(struct sockaddr_in6);
 
     print_cmd(tx_cmd);
-    strcpy(dst_ipv6addr,dst_ipv6addr_list[nodeid]);
+    strcpy(dst_ipv6addr,node_db_list[nodeid].ipv6_addr);
     sprintf(str_port,"%d",port);
 
     //printf("ipv6_send: node = %d, ipv6= %s\n",nodeid, dst_ipv6addr);  
@@ -493,6 +529,9 @@ int ip6_send_cmd(int nodeid, int port) {
         rx_reply = tx_cmd;
         rx_reply.err_code = ERR_TIME_OUT;
         rx_reply.type = MSG_TYPE_REP;
+
+        /*update local DB*/
+        node_db_list[nodeid].num_timeout++;
     }
     else if (res == -1) {
         printf(" - ERROR: GW forwarding command \n");
@@ -505,6 +544,9 @@ int ip6_send_cmd(int nodeid, int port) {
             p = (char *) (&rev_buffer); 
             cmdPtr = (cmd_struct_t *)p;
             rx_reply = *cmdPtr;
+
+            /*update local DB*/
+            node_db_list[nodeid].tx_rep++;
         }
     }
 
