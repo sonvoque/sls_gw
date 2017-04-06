@@ -39,7 +39,7 @@ static  char    str_port[5];
 static  char    cmd[20];
 static  char    arg[32];
 
-struct node_db_struct  node_db;
+static node_db_struct_t  node_db;
 
 struct pollfd fd;
 int res;
@@ -66,46 +66,48 @@ static int ip6_send_cmd (int nodeid, int port);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd);
+static void finish_with_error(MYSQL *con);
+static void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb);
 
 struct timeval t0;
 struct timeval t1;
 float elapsed;
 
+MYSQL *con;
 
+void finish_with_error(MYSQL *con) {
+  fprintf(stderr, "%s\n", mysql_error(con));
+  mysql_close(con);
+  exit(1);        
+}
+
+/*------------------------------------------------*/
 void init_main() {
-    MYSQL *con = mysql_init(NULL);
-
     timeout_val = TIME_OUT;
 
-    printf("DATABASE: MySQL client version: %s\n", mysql_get_client_info());
+    con = mysql_init(NULL);
+    printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
     if (con == NULL) {
-      fprintf(stderr, "%s\n", mysql_error(con));
-      exit(1);
-    }
-    
-    if (mysql_real_connect(con, "localhost", "root", "Son100480", 
-        NULL, 0, NULL, 0) == NULL) {
-        fprintf(stderr, "%s\n", mysql_error(con));
-        mysql_close(con);
-        exit(1);
-    }  
-    else {
-        printf("DB successful authentication \n");
-    }
-
-
-    if (mysql_query(con, "SELECT * FROM sls_db"))  {
-        printf("Successfully connecting to DB sls_db\n");
-    }
-    else {
-        printf("ERROR connecting to DB sls_db\n");
-        mysql_close(con);
-        exit(1);
-
-    }
-
-    mysql_close(con);   
+      finish_with_error(con);
+    }    
 }
+
+/*------------------------------------------------*/
+void get_db_row(MYSQL_ROW row, node_db_struct_t *nodedb) {
+    nodedb->index       = atoi(row[0]);
+    nodedb->id          = atoi(row[1]);
+    strcpy(nodedb->ipv6_addr,row[2]);
+    strcpy(nodedb->connected,row[3]);
+    nodedb->rx_cmd      = atoi(row[4]);
+    nodedb->tx_rep      = atoi(row[5]);
+    nodedb->num_timeout = atoi(row[6]);
+    nodedb->last_cmd    = atoi(row[7]);
+
+    strcpy(dst_ipv6addr_list[nodedb->id], nodedb->ipv6_addr);
+    //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
+    //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
+}
+
 /*------------------------------------------------*/
 int read_node_list(){
 int     node;
@@ -115,6 +117,8 @@ FILE *ptr_file;
 char buf[1000];
 
     num_of_node = 0;
+
+    /*
     ptr_file =fopen("node_list.txt","r");
     if (!ptr_file)
         return 1;
@@ -126,8 +130,44 @@ char buf[1000];
         num_of_node++;
     }
     fclose(ptr_file);
+    */
 
+
+    if (mysql_real_connect(con, "localhost", "root", "Son100480", 
+        "sls_db", 0, NULL, 0) == NULL) {
+        finish_with_error(con);
+    }  
+
+    if (mysql_query(con, "SELECT * FROM sls_db")) {
+        finish_with_error(con);
+    }
+  
+    MYSQL_RES *result = mysql_store_result(con);
+    if (result == NULL) {
+        finish_with_error(con);
+    }
+    else {
+        printf("Reading DB: sls_db......\n");
+    }
+
+    int num_fields = mysql_num_fields(result);
+
+    MYSQL_ROW row;
+    while ((row = mysql_fetch_row(result)))  { 
+        //for(int i = 0; i < num_fields; i++)
+            //printf("%s ", row[i] ? row[i] : "NULL");
+
+        num_of_node++;
+        get_db_row(row, &node_db);        
+        //printf("node = %d, ipv6 = %s\n",node_db.id, node_db.ipv6_addr);
+    }
+  
     printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
+
+    mysql_free_result(result);
+
+    mysql_close(con);   
+
     return 0;
 }
 
@@ -136,7 +176,7 @@ static void run_node_discovery(){
 int res, i;
     
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
-    for (i = 0; i < num_of_node; i++) {
+    for (i = 1; i < num_of_node; i++) {
         tx_cmd.type = MSG_TYPE_REQ;
         tx_cmd.cmd = CMD_RF_HELLO;
         tx_cmd.err_code = 0;
