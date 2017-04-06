@@ -15,6 +15,8 @@ author Vo Que Son <sonvq@hcmut.edu.vn>
 #include <sys/time.h>
 #include <poll.h>
 
+//#include <mysql/my_global.h>
+#include <mysql/mysql.h>
 
 #include "sls.h"
 #include "sls_cli.h"
@@ -37,20 +39,12 @@ static  char    str_port[5];
 static  char    cmd[20];
 static  char    arg[32];
 
+struct node_db_struct  node_db;
+
 struct pollfd fd;
 int res;
 
-static  char    dst_ipv6addr_list[20][50] ={"aaaa::212:4b00:5af:8406",
-											"aaaa::212:4b00:5af:8570",
-                                            "aaaa::212:4b00:5a9:8f83",
-                                            "aaaa::212:4b00:5a9:8fd5",
-                                            "aaaa::212:4b00:5af:83f8",
-											"aaaa::212:4b00:5af:851f",
-											"aaaa::212:4b00:5af:8422",
-											"aaaa::212:4b00:5af:84dd",
-                                            "aaaa::212:4b00:5a9:8ff2",
-                                            "aaaa::212:4b00:5a9:8f91",
-                                                                    };
+static  char    dst_ipv6addr_list[40][50];
 
 static  cmd_struct_t  tx_cmd, rx_reply;
 static  cmd_struct_t *cmdPtr;
@@ -79,7 +73,38 @@ float elapsed;
 
 
 void init_main() {
+    MYSQL *con = mysql_init(NULL);
+
     timeout_val = TIME_OUT;
+
+    printf("DATABASE: MySQL client version: %s\n", mysql_get_client_info());
+    if (con == NULL) {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      exit(1);
+    }
+    
+    if (mysql_real_connect(con, "localhost", "root", "Son100480", 
+        NULL, 0, NULL, 0) == NULL) {
+        fprintf(stderr, "%s\n", mysql_error(con));
+        mysql_close(con);
+        exit(1);
+    }  
+    else {
+        printf("DB successful authentication \n");
+    }
+
+
+    if (mysql_query(con, "SELECT * FROM sls_db"))  {
+        printf("Successfully connecting to DB sls_db\n");
+    }
+    else {
+        printf("ERROR connecting to DB sls_db\n");
+        mysql_close(con);
+        exit(1);
+
+    }
+
+    mysql_close(con);   
 }
 /*------------------------------------------------*/
 int read_node_list(){
@@ -234,6 +259,7 @@ void process_gw_cmd(cmd_struct_t cmd) {
 int main(int argc, char* argv[]) {
 //-------------------------------------------------------------------------------------------
 // Khoi tao socket cho server de nhan du lieu
+    clear();
     init_main();
 
     struct sockaddr_in pi_myaddr;	/* our address */
@@ -261,7 +287,7 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-    clear();
+    
     /* read node list*/
     read_node_list();
     /* running discovery */
