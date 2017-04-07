@@ -96,7 +96,7 @@ static char sql_db[20] = "sls_db";
 void finish_with_error(MYSQL *con) {
   fprintf(stderr, "%s\n", mysql_error(con));
   mysql_close(con);
-  exit(1);        
+  //exit(1);        
 }
 
 /*------------------------------------------------*/
@@ -122,13 +122,15 @@ void get_db_row(MYSQL_ROW row, int i) {
 }
 
 
+/*------------------------------------------------*/
 void update_sql_db() {
 
 }
 
+/*------------------------------------------------*/
 void show_local_db() {
     int i;
-    
+    printf("\n");
     printf("|-----------------------------------------------LOCAL DATABASE--------------------------------------------------|\n");
     printf("| idx | node |             ipv6               | connect | tx | rx | t_out | last_cmd |        last_seen         |\n");
     printf("|-----|------|--------------------------------|---------|----|----|-------|----------|--------------------------|\n");
@@ -148,6 +150,7 @@ void show_local_db() {
 }
 
 
+/*------------------------------------------------*/
 void show_sql_db() {
     int i, num_fields;
 
@@ -168,9 +171,9 @@ void show_sql_db() {
         finish_with_error(con);
     }
 
-    num_fields = mysql_num_fields(result);
-
+    printf("\n");
     printf("|------------------------------SQL DATABASE-----------------------------------------|\n");
+    num_fields = mysql_num_fields(result);
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
         for(i = 0; i < num_fields; i++) {
@@ -191,7 +194,9 @@ void show_sql_db() {
 
 /*------------------------------------------------*/
 int read_node_list(){
+    bool sql_db_error;
     int     node;
+    int num_fields;
     char    ipv6_addr[50];
    
     FILE *ptr_file;
@@ -199,58 +204,64 @@ int read_node_list(){
 
     num_of_node = 0;
 
-    /*
-    ptr_file =fopen("node_list.txt","r");
-    if (!ptr_file)
-        return 1;
-
-    while (fgets(buf,1000, ptr_file)!=NULL) {
-        sscanf(buf,"%d %s",&node, ipv6_addr);
-        strcpy(dst_ipv6addr_list[node], ipv6_addr);
-        //printf("node = %d,   ipv6 = %s\n",node, dst_ipv6addr_list[node]);
-        num_of_node++;
-    }
-    fclose(ptr_file);
-    */
-
+    sql_db_error = false;
     con = mysql_init(NULL);
     printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
     if (con == NULL) {
-      finish_with_error(con);
-    }    
-    if (mysql_real_connect(con, sql_server_ipaddr, sql_username, sql_password, sql_db, 0, NULL, 0) == NULL) {
         finish_with_error(con);
+        sql_db_error = true;
+    }    
+    if (mysql_real_connect(con, sql_server_ipaddr, sql_username,sql_password, sql_db,0,NULL,0) == NULL) {
+        finish_with_error(con);
+        sql_db_error = true;
     }  
     if (mysql_query(con, "SELECT * FROM sls_db")) {
         finish_with_error(con);
+        sql_db_error = true;
     }
   
     MYSQL_RES *result = mysql_store_result(con);
     if (result == NULL) {
         finish_with_error(con);
+        sql_db_error = true;
     }
     else {
         printf("Reading DB: sls_db......\n");
     }
 
-    int num_fields = mysql_num_fields(result);
-
+    num_fields = mysql_num_fields(result);
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
         //for(int i = 0; i < num_fields; i++)
             //printf("%s ", row[i] ? row[i] : "NULL");
-
         get_db_row(row, num_of_node);        
         num_of_node++;
-        //printf("node = %d, ipv6 = %s\n",node_db.id, node_db.ipv6_addr);
     }
-  
-    printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
-    show_local_db();
 
     mysql_free_result(result);
     mysql_close(con);   
 
+    //sql_db_error = true;
+    if (sql_db_error==false) {
+        printf("SQL-DB succesfully reading node infor from SQL DB....\n");    
+    }
+    else {
+        printf("SQL-DB error reading node infor from config file....\n");    
+        num_of_node =0;
+        ptr_file =fopen("node_list.txt","r");
+        if (!ptr_file)
+            return 1;
+        while (fgets(buf,1000, ptr_file)!=NULL) {
+            sscanf(buf,"%d %s",&node, ipv6_addr);
+            strcpy(node_db_list[node].ipv6_addr, ipv6_addr);
+            //printf("node = %d,   ipv6 = %s\n",node, node_db_list[node].ipv6_addr);
+            num_of_node++;
+            }
+        fclose(ptr_file);
+    }
+
+    printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
+    show_local_db();
     return 0;
 }
 
