@@ -147,6 +147,8 @@ void show_local_db() {
 
 
 void show_sql_db() {
+    int i, num_fields;
+
     con = mysql_init(NULL);
     if (con == NULL) {
       finish_with_error(con);
@@ -164,12 +166,12 @@ void show_sql_db() {
         finish_with_error(con);
     }
 
-    int num_fields = mysql_num_fields(result);
+    num_fields = mysql_num_fields(result);
 
     printf("|------------------------------SQL DATABASE-----------------------------------------|\n");
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
-        for(int i = 0; i < num_fields; i++) {
+        for(i = 0; i < num_fields; i++) {
             if (i==0)
                 printf("| %5s | ", row[i] ? row[i] : "NULL");
             else if (i==2)
@@ -187,11 +189,11 @@ void show_sql_db() {
 
 /*------------------------------------------------*/
 int read_node_list(){
-int     node;
-char    ipv6_addr[50];
+    int     node;
+    char    ipv6_addr[50];
    
-FILE *ptr_file;
-char buf[1000];
+    FILE *ptr_file;
+    char buf[1000];
 
     num_of_node = 0;
 
