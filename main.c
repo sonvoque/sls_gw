@@ -127,10 +127,12 @@ void update_sql_db() {
 }
 
 void show_local_db() {
+    int i;
+    
     printf("|-----------------------------------------------LOCAL DATABASE--------------------------------------------------|\n");
     printf("| idx | node |             ipv6               | connect | tx | rx | t_out | last_cmd |        last_seen         |\n");
     printf("|-----|------|--------------------------------|---------|----|----|-------|----------|--------------------------|\n");
-    for(int i = 0; i < num_of_node; i++) {
+    for(i = 0; i < num_of_node; i++) {
         if (i>0) 
             printf("| %3d | %4d | %30s |    %s    | %2d | %2d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
