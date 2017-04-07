@@ -15,6 +15,7 @@ compile: gcc -o main main.c $(mysql_config --libs --cflags)
 #include <string.h>
 #include <sys/time.h>
 #include <poll.h>
+#include <time.h>
 
 //#include <mysql/my_global.h>
 #include <mysql/mysql.h>
@@ -28,7 +29,7 @@ compile: gcc -o main main.c $(mysql_config --libs --cflags)
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    3      //seconds
+#define TIME_OUT    1      //seconds
 
 static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
@@ -80,10 +81,18 @@ struct timeval t0;
 struct timeval t1;
 float elapsed;
 
+time_t rawtime;
+struct tm * timeinfo;
+
 MYSQL *con;
 char *sql_cmd; 
+static char sql_server_ipaddr[20] ="localhost";
+static char sql_username[20]= "root";
+static char sql_password[20]= "Son100480";
+static char sql_db[20] = "sls_db";
 
 
+/*------------------------------------------------*/
 void finish_with_error(MYSQL *con) {
   fprintf(stderr, "%s\n", mysql_error(con));
   mysql_close(con);
@@ -118,19 +127,22 @@ void update_sql_db() {
 }
 
 void show_local_db() {
-    printf("|------------------------LOCAL DATABASE----------------------------|\n");
+    printf("|-----------------------------------------------LOCAL DATABASE--------------------------------------------------|\n");
+    printf("| idx | node |             ipv6               | connect | tx | rx | t_out | last_cmd |        last_seen         |\n");
+    printf("|-----|------|--------------------------------|---------|----|----|-------|----------|--------------------------|\n");
     for(int i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %02d | %02d | %30s | %s | %02d | %02d | %02d | %02X | \n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %3d | %4d | %30s |    %s    | %2d | %2d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
-                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd );  
+                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].date_time );  
         else
-            printf("| %02d | %02d | %30s |*%s | %02d | %02d | %02d | %02X | \n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %3d | %4d | %30s |   *%s    | %2d | %2d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
-                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd );  
-
+                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].date_time);  
     }
-    printf("|------------------------------------------------------------------|\n");
+    printf("|---------------------------------------------------------------------------------------------------------------|\n");
 }
 
 
@@ -139,7 +151,7 @@ void show_sql_db() {
     if (con == NULL) {
       finish_with_error(con);
     }    
-    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(con, sql_server_ipaddr, sql_username, sql_password, sql_db, 0, NULL, 0) == NULL) {
         finish_with_error(con);
     }  
 
@@ -202,7 +214,7 @@ char buf[1000];
     if (con == NULL) {
       finish_with_error(con);
     }    
-    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(con, sql_server_ipaddr, sql_username, sql_password, sql_db, 0, NULL, 0) == NULL) {
         finish_with_error(con);
     }  
     if (mysql_query(con, "SELECT * FROM sls_db")) {
@@ -245,7 +257,7 @@ void execute_sql_cmd(char *sql) {
     if (con == NULL) {
       finish_with_error(con);
     }    
-    if (mysql_real_connect(con, "localhost", "root", "Son100480", "sls_db", 0, NULL, 0) == NULL) {
+    if (mysql_real_connect(con, sql_server_ipaddr, sql_username, sql_password, sql_db, 0, NULL, 0) == NULL) {
         finish_with_error(con);
     }  
 
@@ -256,7 +268,7 @@ void execute_sql_cmd(char *sql) {
     mysql_close(con);   
 }
 /*------------------------------------------------*/
-static void run_node_discovery(){
+void run_node_discovery(){
     char sql[200];
     int res, i;
 
@@ -455,6 +467,7 @@ int main(int argc, char* argv[]) {
 			gettimeofday(&t1, 0);
             elapsed = timedifference_msec(t0, t1);
             printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+            
             /*update local DB */
             node_db_list[node_id].rx_cmd++;
             node_db_list[node_id].last_cmd = tx_cmd.cmd;
@@ -481,6 +494,7 @@ int ip6_send_cmd(int nodeid, int port) {
     char buffer[MAXBUF];
     char str_app_key[32];
     unsigned char byte_array[16];
+    char str_time[80];
 
     sin6len = sizeof(struct sockaddr_in6);
 
@@ -532,6 +546,14 @@ int ip6_send_cmd(int nodeid, int port) {
 
         /*update local DB*/
         node_db_list[nodeid].num_timeout++;
+        strcpy(node_db_list[nodeid].connected,"N");
+       
+        time(&rawtime );
+        timeinfo = localtime ( &rawtime );
+        strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
+        strcpy (node_db_list[nodeid].date_time, str_time);
+
+        update_sql_db();
     }
     else if (res == -1) {
         printf(" - ERROR: GW forwarding command \n");
@@ -547,6 +569,12 @@ int ip6_send_cmd(int nodeid, int port) {
 
             /*update local DB*/
             node_db_list[nodeid].tx_rep++;
+            strcpy(node_db_list[nodeid].connected,"Y");
+            time(&rawtime );
+            timeinfo = localtime ( &rawtime );
+            strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
+            strcpy (node_db_list[nodeid].date_time, str_time);
+            update_sql_db();
         }
     }
 
