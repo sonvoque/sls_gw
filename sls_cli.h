@@ -43,7 +43,7 @@ struct node_db_struct_t {
 	int			num_rep;
 	int 		num_timeout;
 	int			last_cmd;
-	char		date_time[50];
+	char		last_seen[50];
 };
 
 typedef struct node_db_struct_t		node_db_struct_t;

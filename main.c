@@ -77,7 +77,7 @@ static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
-static void execute_sql_cmd(char *sql);
+static int execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
@@ -133,7 +133,25 @@ void get_db_row(MYSQL_ROW row, int i) {
 
 /*------------------------------------------------*/
 void update_sql_db() {
-
+    char sql[300];
+    int i;
+    
+    for (i=1; i<num_of_node; i++) {
+        if (strcmp(node_db_list[i].connected,"Y")==true) {
+            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s' WHERE node_id=%d;", 
+                node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].last_seen, i);
+        }
+        else {
+            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s' WHERE node_id=%d;", 
+                node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].last_seen, i);
+        }    
+        if (execute_sql_cmd(sql)==0){
+            //printf("sql_cmd = %s\n", sql);
+        }    
+    }
+    
 }
 
 /*------------------------------------------------*/
@@ -148,12 +166,12 @@ void show_local_db() {
             printf("| %3d | %4d | %30s |    %s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
-                node_db_list[i].date_time );  
+                node_db_list[i].last_seen );  
         else
             printf("| %3d | %4d | %30s |   *%s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
-                node_db_list[i].date_time);  
+                node_db_list[i].last_seen);  
     }
     printf("|-----------------------------------------------------------------------------------------------------------------|\n");
 }
@@ -275,20 +293,24 @@ int read_node_list(){
 
 
 /*------------------------------------------------*/
-void execute_sql_cmd(char *sql) {
+int execute_sql_cmd(char *sql) {
     con = mysql_init(NULL);
     if (con == NULL) {
       finish_with_error(con);
+      return 1;
     }    
     if (mysql_real_connect(con, sql_server_ipaddr, sql_username, sql_password, sql_db, 0, NULL, 0) == NULL) {
         finish_with_error(con);
+        return 1;
     }  
 
     if (mysql_query(con, sql)) {
         finish_with_error(con);
+        return 1;
     }
 
     mysql_close(con);   
+    return 0;
 }
 /*------------------------------------------------*/
 void run_node_discovery(){
@@ -306,17 +328,17 @@ void run_node_discovery(){
         }
         else if (res == 0)   {
             printf(" - Node %d [%s] unavailable\n", i, node_db_list[i].ipv6_addr);
-            sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;",i);
-            //sql_cmd = sql;
-            printf("sql_cmd = %s\n", sql);
-            execute_sql_cmd(sql);
+            sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;", i);
+            if (execute_sql_cmd(sql)==0) {
+                //printf("sql_cmd = %s\n", sql);
+            }
         }
         else{
             printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
-            sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;",i);
-            //sql_cmd = sql;
-            printf("sql_cmd = %s\n", sql);
-            execute_sql_cmd(sql);
+            sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;", i);
+            if (execute_sql_cmd(sql)==0) {
+                //printf("sql_cmd = %s\n", sql);
+            }
         }
     }
 }
@@ -530,13 +552,13 @@ int main(int argc, char* argv[]) {
     clear();
     init_main();
 
-    struct sockaddr_in pi_myaddr;	/* our address */
-	struct sockaddr_in pi_remaddr;	/* remote address */
-	socklen_t pi_addrlen = sizeof(pi_remaddr);		/* length of addresses */
-	int pi_recvlen;			/* # bytes received */
-	int pi_fd;				/* our socket */
-	int pi_msgcnt = 0;			/* count # of messages we received */
-	unsigned char pi_buf[BUFSIZE];	/* receive buffer */
+    struct sockaddr_in pi_myaddr;	                      /* our address */
+	struct sockaddr_in pi_remaddr;	                    /* remote address */
+	socklen_t pi_addrlen = sizeof(pi_remaddr);		   /* length of addresses */
+	int pi_recvlen;			                            /* # bytes received */
+	int pi_fd;				                         /* our socket */
+	int pi_msgcnt = 0;			                      /* count # of messages we received */
+	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
 
 	/* create a UDP socket */
 	if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -562,9 +584,7 @@ int main(int argc, char* argv[]) {
     run_node_discovery();
 
     for (;;) {        
-        
         show_local_db();
-
 		printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
 		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
 		if (pi_recvlen > 0) {
@@ -687,7 +707,7 @@ int ip6_send_cmd(int nodeid, int port) {
         time(&rawtime );
         timeinfo = localtime ( &rawtime );
         strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
-        strcpy (node_db_list[nodeid].date_time, str_time);
+        strcpy (node_db_list[nodeid].last_seen, str_time);
         update_sql_db();
     }
     else{
@@ -706,7 +726,7 @@ int ip6_send_cmd(int nodeid, int port) {
             time(&rawtime );
             timeinfo = localtime ( &rawtime );
             strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
-            strcpy (node_db_list[nodeid].date_time, str_time);
+            strcpy (node_db_list[nodeid].last_seen, str_time);
             update_sql_db();
         }
     }
