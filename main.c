@@ -375,7 +375,6 @@ int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max) 
         // Too big for the output array
         return -1;
     }
-
     if (hex_str_len % 2 == 1){
         // hex_str is an odd length, so assume an implicit "0" prefix
         if (sscanf(&(hex_str[0]), "%1hhx", &(byte_array[0])) != 1){
@@ -383,7 +382,6 @@ int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max) 
         }
         i = j = 1;
     }
-
     for (; i < hex_str_len; i+=2, j++){
         if (sscanf(&(hex_str[i]), "%2hhx", &(byte_array[j])) != 1){
             return -1;
@@ -454,28 +452,35 @@ int execute_broadcasd_cmd(uint8_t cmd, int val) {
 }
 
 int execute_multicast_cmd(cmd_struct_t cmd) {
-    int num_multicast_node, multicast_val;
+    int num_multicast_node, multicast_val1, multicast_val2;
     int i, num_timeout, res, num_rep, executed_node;
     uint16_t err_code;
     uint8_t multicast_cmd;
 
     num_multicast_node = cmd.len;
+    if (num_multicast_node>=num_of_node) {
+        printf("Invalid number of multicast nodes....\n");
+        return 1;
+    }
+
     multicast_cmd = cmd.arg[0];
-    multicast_val = cmd.arg[1];
+    multicast_val1 = cmd.arg[1];
+    multicast_val2 = cmd.arg[2];
 
     num_timeout=0;
     num_rep=0;
-    printf("Executing multicast command: 0x%02X, arg = %d ...\n", multicast_cmd, multicast_val);
+    printf("Executing multicast command: 0x%02X, arg = [%d,%d] ...\n", multicast_cmd, multicast_val1,multicast_val2);
 
     err_code = ERR_NORMAL;
     for (i = 0; i < num_multicast_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
         tx_cmd.type = MSG_TYPE_REQ;
         tx_cmd.cmd = multicast_cmd;     
-        tx_cmd.arg[0] = multicast_val;
+        tx_cmd.arg[0] = multicast_val1;
+        tx_cmd.arg[1] = multicast_val2;        
         tx_cmd.err_code = 0;
 
-        executed_node = cmd.arg[i+2];
+        executed_node = cmd.arg[i+3];               //from arg[3] to...
         node_db_list[executed_node].num_req++;
         res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT);
         if (res == -1) {
@@ -498,6 +503,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     rx_reply.arg[0] = num_multicast_node;
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
+    return 0;
 }
 
 
