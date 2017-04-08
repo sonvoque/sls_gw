@@ -82,7 +82,7 @@ static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
 static int execute_broadcasd_cmd(uint8_t cmd, int val);
-
+static int execute_multicast_cmd(cmd_struct_t cmd);
 
 
 struct timeval t0;
@@ -386,7 +386,8 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
             (cmd.cmd==CMD_GW_TURN_ON_ALL) ||
             (cmd.cmd==CMD_GW_TURN_OFF_ALL) ||
             (cmd.cmd==CMD_GW_DIM_ALL) ||            
-            (cmd.cmd==CMD_GW_SET_TIMEOUT);
+            (cmd.cmd==CMD_GW_SET_TIMEOUT) ||
+            (cmd.cmd==CMD_GW_MULTICAST_CMD);
 }
 
 /*------------------------------------------------*/
@@ -430,6 +431,53 @@ int execute_broadcasd_cmd(uint8_t cmd, int val) {
     rx_reply.arg[2] = num_timeout;
 }
 
+int execute_multicast_cmd(cmd_struct_t cmd) {
+    int num_multicast_node, multicast_val;
+    int i, num_timeout, res, num_rep, executed_node;
+    uint16_t err_code;
+    uint8_t multicast_cmd;
+
+    num_multicast_node = cmd.len;
+    multicast_cmd = cmd.arg[0];
+    multicast_val = cmd.arg[1];
+
+    num_timeout=0;
+    num_rep=0;
+    printf("Executing multicast command: 0x%02X, arg = %d ...\n", multicast_cmd, multicast_val);
+
+    err_code = ERR_NORMAL;
+    for (i = 0; i < num_multicast_node; i++) {
+        /* prepare tx_cmd to send to RF nodes*/
+        tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.cmd = multicast_cmd;     
+        tx_cmd.arg[0] = multicast_val;
+        tx_cmd.err_code = 0;
+
+        executed_node = cmd.arg[i+2];
+        node_db_list[executed_node].num_req++;
+        res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT);
+        if (res == -1) {
+            printf(" - ERROR: broadcast process \n");
+        }
+        else if (res == 0)   {
+            printf(" - Send cmd to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
+            num_timeout++;
+            node_db_list[executed_node].num_timeout++;
+            err_code = ERR_BROADCAST_CMD;
+        }
+        else{
+            printf(" - Send cmd to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
+            num_rep++;
+            node_db_list[executed_node].num_rep++;
+            node_db_list[executed_node].last_cmd = tx_cmd.cmd;            
+        }
+    }
+    rx_reply.err_code = err_code;
+    rx_reply.arg[0] = num_multicast_node;
+    rx_reply.arg[1] = num_rep;
+    rx_reply.arg[2] = num_timeout;
+}
+
 
 /*------------------------------------------------*/
 void process_gw_cmd(cmd_struct_t cmd) {
@@ -464,6 +512,11 @@ void process_gw_cmd(cmd_struct_t cmd) {
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
             execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            break;
+
+        case CMD_GW_MULTICAST_CMD:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_multicast_cmd(cmd);
             break;
     }
 }

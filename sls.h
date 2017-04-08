@@ -95,6 +95,7 @@ enum {
 	CMD_RF_REPAIR_ROUTE		= 0xEE,
 
 	CMD_GW_SET_TIMEOUT		= 0xED,
+	CMD_GW_MULTICAST_CMD	= 0xEC,
 };
 
 enum {
