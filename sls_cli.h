@@ -39,8 +39,8 @@ struct node_db_struct_t {
 	int			id;			/*0001xxxx xxxxxxxx */
 	char    	ipv6_addr[50];						
 	char		connected[1];
-	int			rx_cmd;
-	int			tx_rep;
+	int			num_req;
+	int			num_rep;
 	int 		num_timeout;
 	int			last_cmd;
 	char		date_time[50];

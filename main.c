@@ -1,9 +1,15 @@
 /*
-Gateway software for controlling the SLS
-author Vo Que Son <sonvq@hcmut.edu.vn>
-compile: gcc -o main main.c $(mysql_config --libs --cflags)
-*/
-//#include <mysql.h> 
+|-------------------------------------------------------------------|
+| HCMC University of Technology                                     |
+| Telecommunications Departments                                    |
+| Gateway software for controlling the SLS                          |
+| Version: 1.0                                                      |
+| Author: sonvq@hcmut.edu.vn                                        |
+| Date: 01/2017                                                     |
+|                                                                   |
+| compile: gcc -o main main.c $(mysql_config --libs --cflags)       |
+|-------------------------------------------------------------------|*/
+
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -72,9 +78,11 @@ static void process_gw_cmd(cmd_struct_t cmd);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
 static void execute_sql_cmd(char *sql);
-static  void show_sql_db();
-static  void show_local_db();
-static  void update_sql_db();
+static void show_sql_db();
+static void show_local_db();
+static void update_sql_db();
+static int execute_broadcasd_cmd(uint8_t cmd, int val);
+
 
 
 struct timeval t0;
@@ -105,14 +113,15 @@ void init_main() {
     show_sql_db();
 }
 
+
 /*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
     strcpy(node_db_list[i].connected,row[3]);
-    node_db_list[i].rx_cmd      = atoi(row[4]);
-    node_db_list[i].tx_rep      = atoi(row[5]);
+    node_db_list[i].num_req     = atoi(row[4]);
+    node_db_list[i].num_rep     = atoi(row[5]);
     node_db_list[i].num_timeout = atoi(row[6]);
     node_db_list[i].last_cmd    = atoi(row[7]);
 
@@ -131,22 +140,22 @@ void update_sql_db() {
 void show_local_db() {
     int i;
     printf("\n");
-    printf("|-----------------------------------------------LOCAL DATABASE--------------------------------------------------|\n");
-    printf("| idx | node |             ipv6               | connect | tx | rx | t_out | last_cmd |        last_seen         |\n");
-    printf("|-----|------|--------------------------------|---------|----|----|-------|----------|--------------------------|\n");
+    printf("|-----------------------------------------------LOCAL DATABASE----------------------------------------------------|\n");
+    printf("| idx | node |             ipv6               | connect | req | rep | t_out | last_cmd |        last_seen         |\n");
+    printf("|-----|------|--------------------------------|---------|-----|-----|-------|----------|--------------------------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %3d | %4d | %30s |    %s    | %2d | %2d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
-                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
-                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+            printf("| %3d | %4d | %30s |    %s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
+                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].date_time );  
         else
-            printf("| %3d | %4d | %30s |   *%s    | %2d | %2d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
-                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].rx_cmd, 
-                node_db_list[i].tx_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+            printf("| %3d | %4d | %30s |   *%s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
+                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].date_time);  
     }
-    printf("|---------------------------------------------------------------------------------------------------------------|\n");
+    printf("|-----------------------------------------------------------------------------------------------------------------|\n");
 }
 
 
@@ -203,7 +212,6 @@ int read_node_list(){
     char buf[1000];
 
     num_of_node = 0;
-
     sql_db_error = false;
     con = mysql_init(NULL);
     printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
@@ -293,15 +301,15 @@ void run_node_discovery(){
         tx_cmd.cmd = CMD_RF_HELLO;
         tx_cmd.err_code = 0;
         res = ip6_send_cmd(i, SLS_NORMAL_PORT);
-        if (res == 0)   {
+        if (res == -1) {
+            printf(" - ERROR: discovery process \n");
+        }
+        else if (res == 0)   {
             printf(" - Node %d [%s] unavailable\n", i, node_db_list[i].ipv6_addr);
             sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;",i);
             //sql_cmd = sql;
             printf("sql_cmd = %s\n", sql);
             execute_sql_cmd(sql);
-        }
-        else if (res == -1) {
-            printf(" - ERROR: discovery process \n");
         }
         else{
             printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
@@ -311,7 +319,6 @@ void run_node_discovery(){
             execute_sql_cmd(sql);
         }
     }
-
 }
 /*------------------------------------------------*/
 void prepare_cmd() {
@@ -383,6 +390,48 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
+int execute_broadcasd_cmd(uint8_t cmd, int val) {
+    int i, num_timeout, res, num_rep;
+    uint16_t err_code;
+
+    num_timeout=0;
+    num_rep=0;
+    printf("Executing broadcast command: 0x%02X, arg = %d ...\n", cmd, val);
+
+    err_code = ERR_NORMAL;
+    for (i = 1; i < num_of_node; i++) {
+        /* prepare tx_cmd to send to RF nodes*/
+        tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.cmd = cmd;     // CMD_LED_ON;
+        tx_cmd.arg[0] = val;
+        tx_cmd.err_code = 0;
+
+        node_db_list[i].num_req++;
+        res = ip6_send_cmd(i, SLS_NORMAL_PORT);
+        if (res == -1) {
+            printf(" - ERROR: broadcast process \n");
+        }
+        else if (res == 0)   {
+            printf(" - Send cmd to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+            num_timeout++;
+            node_db_list[i].num_timeout++;
+            err_code = ERR_BROADCAST_CMD;
+        }
+        else{
+            printf(" - Send cmd to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+            num_rep++;
+            node_db_list[i].num_rep++;
+            node_db_list[i].last_cmd = tx_cmd.cmd;            
+        }
+    }
+    rx_reply.err_code = err_code;
+    rx_reply.arg[0] = num_of_node-1;
+    rx_reply.arg[1] = num_rep;
+    rx_reply.arg[2] = num_timeout;
+}
+
+
+/*------------------------------------------------*/
 void process_gw_cmd(cmd_struct_t cmd) {
     switch (cmd.cmd) {
         case CMD_GW_HELLO:
@@ -404,14 +453,17 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
+            execute_broadcasd_cmd(CMD_RF_LED_ON, 0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
+            execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
+            execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
     }
 }
@@ -420,6 +472,8 @@ void process_gw_cmd(cmd_struct_t cmd) {
 int main(int argc, char* argv[]) {
 //-------------------------------------------------------------------------------------------
 // Khoi tao socket cho server de nhan du lieu
+    int res;
+
     clear();
     init_main();
 
@@ -478,14 +532,27 @@ int main(int argc, char* argv[]) {
             printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
             tx_cmd = *pi_cmdPtr;
             gettimeofday(&t0, 0);
-            ip6_send_cmd(node_id, SLS_NORMAL_PORT);
+            res = ip6_send_cmd(node_id, SLS_NORMAL_PORT);
 			gettimeofday(&t1, 0);
             elapsed = timedifference_msec(t0, t1);
             printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
             
             /*update local DB */
-            node_db_list[node_id].rx_cmd++;
-            node_db_list[node_id].last_cmd = tx_cmd.cmd;
+            node_db_list[node_id].num_req++;
+            if (res == -1) {
+                printf(" - ERROR: sending process \n");
+            }
+            else if (res == 0)   {
+                //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
+                node_db_list[node_id].num_timeout++;
+                rx_reply.err_code = ERR_TIME_OUT;
+                rx_reply.type = MSG_TYPE_REP;
+            }
+            else{
+                //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
+                node_db_list[node_id].num_rep++;
+                node_db_list[node_id].last_cmd = tx_cmd.cmd;
+            }            
         }
 	}
 	else
@@ -553,25 +620,22 @@ int ip6_send_cmd(int nodeid, int port) {
     fd.fd = sock;
     fd.events = POLLIN;
     res = poll(&fd, 1, timeout_val*1000); // timeout
-    if (res == 0)   {
+    if (res == -1) {
+        printf(" - ERROR: GW forwarding command \n");
+    }
+    else if (res == 0)   {
         printf(" - Time-out: GW forwarding command \n");
         rx_reply = tx_cmd;
-        rx_reply.err_code = ERR_TIME_OUT;
-        rx_reply.type = MSG_TYPE_REP;
 
         /*update local DB*/
-        node_db_list[nodeid].num_timeout++;
+        //node_db_list[nodeid].num_timeout++;
         strcpy(node_db_list[nodeid].connected,"N");
        
         time(&rawtime );
         timeinfo = localtime ( &rawtime );
         strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
         strcpy (node_db_list[nodeid].date_time, str_time);
-
         update_sql_db();
-    }
-    else if (res == -1) {
-        printf(" - ERROR: GW forwarding command \n");
     }
     else{
         // implies (fd.revents & POLLIN) != 0
@@ -582,8 +646,9 @@ int ip6_send_cmd(int nodeid, int port) {
             cmdPtr = (cmd_struct_t *)p;
             rx_reply = *cmdPtr;
 
+            print_cmd(rx_reply);
             /*update local DB*/
-            node_db_list[nodeid].tx_rep++;
+            //node_db_list[nodeid].tx_rep++;
             strcpy(node_db_list[nodeid].connected,"Y");
             time(&rawtime );
             timeinfo = localtime ( &rawtime );

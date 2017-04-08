@@ -72,17 +72,17 @@ enum {
 
 enum {
 	//command id
+	CMD_GET_RF_STATUS 		= 0xFF,
+	CMD_GET_NW_STATUS 		= 0xFE,
+
 	CMD_GET_GW_STATUS 		= 0xFD,
 	CMD_GW_HELLO			= 0xFC,
 	CMD_GW_SHUTDOWN			= 0xFB,
 	CMD_GW_TURN_ON_ALL		= 0xFA,
 	CMD_GW_TURN_OFF_ALL		= 0xF9,
 	CMD_GW_DIM_ALL			= 0xF8,
-	CMD_GW_SET_TIMEOUT		= 0xED,
 	
 
-	CMD_GET_RF_STATUS 		= 0xFF,
-	CMD_GET_NW_STATUS 		= 0xFE,
 	CMD_RF_LED_OFF			= 0xF7,
 	CMD_RF_LED_ON			= 0xF6,
 	CMD_RF_LED_DIM			= 0xF5,
@@ -94,6 +94,7 @@ enum {
 	CMD_RF_REBOOT			= 0xEF,
 	CMD_RF_REPAIR_ROUTE		= 0xEE,
 
+	CMD_GW_SET_TIMEOUT		= 0xED,
 };
 
 enum {
@@ -129,7 +130,8 @@ enum {
 	ERR_UNKNOWN_CMD			= 0x01,
 	ERR_IN_HELLO_STATE		= 0x02,
 	ERR_TIME_OUT			= 0x03,
-	ERR_EMERGENCY			= 0x04,	
+	ERR_EMERGENCY			= 0x04,
+	ERR_BROADCAST_CMD		= 0x05,	
 };
 
 enum {
