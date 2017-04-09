@@ -529,17 +529,20 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_RF_LED_ON, 0);
+            execute_broadcasd_cmd(CMD_LED_DIM, 170);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
+            execute_broadcasd_cmd(CMD_LED_DIM, 0);
+            //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
+            //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_MULTICAST_CMD:

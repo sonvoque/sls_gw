@@ -96,6 +96,16 @@ enum {
 
 	CMD_GW_SET_TIMEOUT		= 0xED,
 	CMD_GW_MULTICAST_CMD	= 0xEC,
+
+	CMD_LED_PING			= 0x01,
+	CMD_LED_SET_RTC			= 0x02,
+	CMD_LED_RTC 			= 0x03,
+	CMD_LED_MODE			= 0x04,
+	CMD_LED_GET_STATUS      = 0x15,
+	CMD_LED_EMERGENCY		= 0x06,
+	CMD_LED_DIM				= 0x08,
+	CMD_LED_SET_ID			= 0x0E,
+	CMD_LED_GET_ID			= 0x0F,
 };
 
 enum {
