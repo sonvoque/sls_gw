@@ -73,7 +73,7 @@ static	int node_id, num_of_node, timeout_val;
 
 static int read_node_list();
 static void run_node_discovery();
-static int ip6_send_cmd (int nodeid, int port);
+static int ip6_send_cmd (int nodeid, int port, int retrans);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd);
@@ -334,7 +334,7 @@ void run_node_discovery(){
         tx_cmd.type = MSG_TYPE_REQ;
         tx_cmd.cmd = CMD_RF_HELLO;
         tx_cmd.err_code = 0;
-        res = ip6_send_cmd(i, SLS_NORMAL_PORT);
+        res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
         if (res == -1) {
             printf(" - ERROR: discovery process \n");
         }
@@ -440,7 +440,7 @@ int execute_broadcasd_cmd(uint8_t cmd, int val) {
         tx_cmd.err_code = 0;
 
         node_db_list[i].num_req++;
-        res = ip6_send_cmd(i, SLS_NORMAL_PORT);
+        res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
         if (res == -1) {
             printf(" - ERROR: broadcast process \n");
         }
@@ -494,7 +494,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
 
         executed_node = cmd.arg[i+3];               //from arg[3] to...
         node_db_list[executed_node].num_req++;
-        res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT);
+        res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
         if (res == -1) {
             printf(" - ERROR: broadcast process \n");
         }
@@ -626,7 +626,7 @@ int main(int argc, char* argv[]) {
             printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
             tx_cmd = *pi_cmdPtr;
             gettimeofday(&t0, 0);
-            res = ip6_send_cmd(node_id, SLS_NORMAL_PORT);
+            res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
 			gettimeofday(&t1, 0);
             elapsed = timedifference_msec(t0, t1);
             printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
@@ -661,7 +661,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-int ip6_send_cmd(int nodeid, int port) {
+int ip6_send_cmd(int nodeid, int port, int retrans) {
     int sock;
     int status, i;
     struct addrinfo sainfo, *psinfo;
@@ -705,7 +705,7 @@ int ip6_send_cmd(int nodeid, int port) {
 
 
     num_of_retrans = 0;
-    while (num_of_retrans < NUM_RETRANSMISSIONS) {
+    while (num_of_retrans < retrans) {
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
             printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
