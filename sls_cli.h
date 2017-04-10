@@ -13,7 +13,6 @@
 #define SLS_CLI_H_
 
 
-
 #define SLS_LED_HELLO			"led_hello"
 #define SLS_LED_ON				"led_on"
 #define SLS_LED_OFF				"led_off"
@@ -43,6 +42,7 @@ struct node_db_struct_t {
 	int			num_rep;
 	int 		num_timeout;
 	int			last_cmd;
+	int 		num_of_retrans;
 	char		last_seen[50];
 };
 

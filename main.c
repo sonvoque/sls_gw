@@ -35,7 +35,9 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    1      //seconds
+#define TIME_OUT    2      //seconds
+#define NUM_RETRANSMISSIONS 3
+
 
 static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
@@ -104,12 +106,13 @@ static char sql_db[20] = "sls_db";
 void finish_with_error(MYSQL *con) {
   fprintf(stderr, "%s\n", mysql_error(con));
   mysql_close(con);
-  //exit(1);        
+  exit(1);        
 }
 
 /*------------------------------------------------*/
 void init_main() {
     timeout_val = TIME_OUT;
+    strcpy(node_db_list[0].connected,"Y");
     show_sql_db();
 }
 
@@ -124,7 +127,9 @@ void get_db_row(MYSQL_ROW row, int i) {
     node_db_list[i].num_rep     = atoi(row[5]);
     node_db_list[i].num_timeout = atoi(row[6]);
     node_db_list[i].last_cmd    = atoi(row[7]);
-
+    strcpy(node_db_list[i].last_seen,row[8]);    
+    
+    node_db_list[i].num_of_retrans = atoi(row[9]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
     //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
     //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
@@ -138,14 +143,14 @@ void update_sql_db() {
     
     for (i=1; i<num_of_node; i++) {
         if (strcmp(node_db_list[i].connected,"Y")==true) {
-            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s' WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
-                node_db_list[i].last_seen, i);
+                node_db_list[i].last_seen, node_db_list[i].num_of_retrans, i);
         }
         else {
-            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s' WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
-                node_db_list[i].last_seen, i);
+                node_db_list[i].last_seen, node_db_list[i].num_of_retrans, i);
         }    
         if (execute_sql_cmd(sql)==0){
             //printf("sql_cmd = %s\n", sql);
@@ -158,19 +163,19 @@ void update_sql_db() {
 void show_local_db() {
     int i;
     printf("\n");
-    printf("|-----------------------------------------------LOCAL DATABASE----------------------------------------------------|\n");
-    printf("| idx | node |             ipv6               | connect | req | rep | t_out | last_cmd |        last_seen         |\n");
-    printf("|-----|------|--------------------------------|---------|-----|-----|-------|----------|--------------------------|\n");
+    printf("|-----------------------------------------LOCAL DATABASE----------------------------------------------------------|\n");
+    printf("| idx | node |             ipv6         | connect | req | rep | t_out | last_cmd | retry |       last_seen        |\n");
+    printf("|-----|------|--------------------------|---------|-----|-----|-------|----------|-------|------------------------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %3d | %4d | %30s |    %s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %3d | %4d | %24s |    %s    | %3d | %3d | %5d |   0x%02X   | %5d | %22s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
-                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen );  
         else
-            printf("| %3d | %4d | %30s |   *%s    | %3d | %3d | %5d |   0x%02X   | %24s |\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %3d | %4d | %24s |   *%s    | %3d | %3d | %5d |   0x%02X   | %5d | %22s |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
-                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
+                node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen);  
     }
     printf("|-----------------------------------------------------------------------------------------------------------------|\n");
@@ -199,21 +204,21 @@ void show_sql_db() {
     }
 
     printf("\n");
-    printf("|------------------------------SQL DATABASE-----------------------------------------|\n");
+    printf("|---------------------------------------------SQL DATABASE---------------------------------------------------|\n");
     num_fields = mysql_num_fields(result);
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
         for(i = 0; i < num_fields; i++) {
             if (i==0)
-                printf("| %5s | ", row[i] ? row[i] : "NULL");
-            else if (i==2)
-                printf("%25s | ", row[i] ? row[i] : "NULL");
+                printf("| %3s | ", row[i] ? row[i] : "NULL");
+            else if ((i==2) || (i==8))
+                printf("%24s | ", row[i] ? row[i] : "NULL");
             else
-                printf("%5s | ", row[i] ? row[i] : "NULL");
+                printf("%4s | ", row[i] ? row[i] : "NULL");
         }
         printf("\n");
     }
-    printf("|-----------------------------------------------------------------------------------|\n");
+    printf("|------------------------------------------------------------------------------------------------------------|\n");
 
     mysql_free_result(result);
     mysql_close(con);   
@@ -232,6 +237,7 @@ int read_node_list(){
     num_of_node = 0;
     sql_db_error = false;
     con = mysql_init(NULL);
+
     printf("DATABASE: sls_db; MySQL client version: %s\n", mysql_get_client_info());
     if (con == NULL) {
         finish_with_error(con);
@@ -255,17 +261,22 @@ int read_node_list(){
         printf("Reading DB: sls_db......\n");
     }
 
+    
     num_fields = mysql_num_fields(result);
     MYSQL_ROW row;
+    
+    
     while ((row = mysql_fetch_row(result)))  { 
         //for(int i = 0; i < num_fields; i++)
-            //printf("%s ", row[i] ? row[i] : "NULL");
+        //    printf("%s ", row[i] ? row[i] : "NULL");
         get_db_row(row, num_of_node);        
         num_of_node++;
     }
+    
 
     mysql_free_result(result);
     mysql_close(con);   
+    
 
     //sql_db_error = true;
     if (sql_db_error==false) {
@@ -285,6 +296,7 @@ int read_node_list(){
             }
         fclose(ptr_file);
     }
+    
 
     printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
     show_local_db();
@@ -529,20 +541,20 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, 170);
-            //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
+            //execute_broadcasd_cmd(CMD_LED_DIM, 170);
+            execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, 0);
-            //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
+            //execute_broadcasd_cmd(CMD_LED_DIM, 0);
+            execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
-            //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            //execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
+            execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_MULTICAST_CMD:
@@ -659,6 +671,7 @@ int ip6_send_cmd(int nodeid, int port) {
     char str_app_key[32];
     unsigned char byte_array[16];
     char str_time[80];
+    int num_of_retrans;
 
     sin6len = sizeof(struct sockaddr_in6);
 
@@ -689,55 +702,65 @@ int ip6_send_cmd(int nodeid, int port) {
     sainfo.ai_socktype = SOCK_DGRAM;
     sainfo.ai_protocol = IPPROTO_UDP;
     status = getaddrinfo(dst_ipv6addr, str_port, &sainfo, &psinfo);
-  
-    status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
-    if (status > 0)     {
-        printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s  ....done\n",status, dst_ipv6addr,str_port);        
-    }
-    else {
-        printf("\n2. Forward REQUEST to [%s]:%s  ....ERROR\n",dst_ipv6addr,str_port);  
-    }    
 
-    /*wait for a reply */
-    fd.fd = sock;
-    fd.events = POLLIN;
-    res = poll(&fd, 1, timeout_val*1000); // timeout
-    if (res == -1) {
-        printf(" - ERROR: GW forwarding command \n");
-    }
-    else if (res == 0)   {
-        printf(" - Time-out: GW forwarding command \n");
-        rx_reply = tx_cmd;
 
-        /*update local DB*/
-        //node_db_list[nodeid].num_timeout++;
-        strcpy(node_db_list[nodeid].connected,"N");
-       
-        time(&rawtime );
-        timeinfo = localtime ( &rawtime );
-        strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
-        strcpy (node_db_list[nodeid].last_seen, str_time);
-        update_sql_db();
-    }
-    else{
-        // implies (fd.revents & POLLIN) != 0
-        rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0,(struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
-        if (rev_bytes>=0) {
-            printf("3. Got REPLY (%d bytes):\n",rev_bytes);   
-            p = (char *) (&rev_buffer); 
-            cmdPtr = (cmd_struct_t *)p;
-            rx_reply = *cmdPtr;
+    num_of_retrans = 0;
+    while (num_of_retrans < NUM_RETRANSMISSIONS) {
+        status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
+        if (status > 0)     {
+            printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
+        }
+        else {
+            printf("\n2. Forward REQUEST to [%s]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
+        }    
 
-            print_cmd(rx_reply);
+        /*wait for a reply */
+        fd.fd = sock;
+        fd.events = POLLIN;
+        res = poll(&fd, 1, timeout_val*1000); // timeout
+        if (res == -1) {
+            printf(" - ERROR: GW forwarding command \n");
+        }
+        else if (res == 0)   {
+            printf(" - Time-out: GW forwarding command \n");
+            rx_reply = tx_cmd;
+
+            num_of_retrans++;
             /*update local DB*/
-            //node_db_list[nodeid].tx_rep++;
-            strcpy(node_db_list[nodeid].connected,"Y");
+            //node_db_list[nodeid].num_timeout++;
+            strcpy(node_db_list[nodeid].connected,"N");
+            node_db_list[nodeid].num_of_retrans = num_of_retrans;
             time(&rawtime );
             timeinfo = localtime ( &rawtime );
             strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
             strcpy (node_db_list[nodeid].last_seen, str_time);
             update_sql_db();
         }
+        else{
+            // implies (fd.revents & POLLIN) != 0
+            rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0,(struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
+            if (rev_bytes>=0) {
+                printf("3. Got REPLY (%d bytes):\n",rev_bytes);   
+                p = (char *) (&rev_buffer); 
+                cmdPtr = (cmd_struct_t *)p;
+                rx_reply = *cmdPtr;
+
+                print_cmd(rx_reply);
+                /*update local DB*/
+                //node_db_list[nodeid].tx_rep++;
+                strcpy(node_db_list[nodeid].connected,"Y");
+                node_db_list[nodeid].num_of_retrans = num_of_retrans;
+
+                time(&rawtime );
+                timeinfo = localtime ( &rawtime );
+                strftime(str_time,80,"%x - %I:%M:%S %p", timeinfo);
+                strcpy (node_db_list[nodeid].last_seen, str_time);
+                update_sql_db();
+
+                num_of_retrans = NUM_RETRANSMISSIONS;
+                break;
+            }
+        } /* while */    
     }
 
     shutdown(sock, 2);
