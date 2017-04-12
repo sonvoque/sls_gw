@@ -35,8 +35,8 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    2      //seconds
-#define NUM_RETRANSMISSIONS 3
+#define TIME_OUT    1.5      //seconds
+#define NUM_RETRANSMISSIONS 2
 
 
 static  int     rev_bytes;
@@ -104,9 +104,11 @@ static char sql_db[20] = "sls_db";
 
 /*------------------------------------------------*/
 void finish_with_error(MYSQL *con) {
+#ifdef USING_SQL_SERVER    
   fprintf(stderr, "%s\n", mysql_error(con));
   mysql_close(con);
-  exit(1);        
+  //exit(1);        
+#endif
 }
 
 /*------------------------------------------------*/
@@ -119,6 +121,7 @@ void init_main() {
 
 /*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
+#ifdef USING_SQL_SERVER    
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
@@ -131,13 +134,16 @@ void get_db_row(MYSQL_ROW row, int i) {
     
     node_db_list[i].num_of_retrans = atoi(row[9]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
+
     //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
     //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
+#endif
 }
 
 
 /*------------------------------------------------*/
 void update_sql_db() {
+#ifdef USING_SQL_SERVER    
     char sql[300];
     int i;
     
@@ -156,11 +162,11 @@ void update_sql_db() {
             //printf("sql_cmd = %s\n", sql);
         }    
     }
-    
+#endif    
 }
 
 /*------------------------------------------------*/
-void show_local_db() {
+void show_local_db() { 
     int i;
     printf("\n");
     printf("|-----------------------------------------LOCAL DATABASE----------------------------------------------------------|\n");
@@ -184,6 +190,7 @@ void show_local_db() {
 
 /*------------------------------------------------*/
 void show_sql_db() {
+#ifdef USING_SQL_SERVER        
     int i, num_fields;
 
     con = mysql_init(NULL);
@@ -222,6 +229,7 @@ void show_sql_db() {
 
     mysql_free_result(result);
     mysql_close(con);   
+#endif    
 }
 
 /*------------------------------------------------*/
@@ -235,6 +243,8 @@ int read_node_list(){
     char buf[1000];
 
     num_of_node = 0;
+
+#ifdef USING_SQL_SERVER        
     sql_db_error = false;
     con = mysql_init(NULL);
 
@@ -276,14 +286,15 @@ int read_node_list(){
 
     mysql_free_result(result);
     mysql_close(con);   
-    
+#else    
+    sql_db_error = true;
+#endif    
 
-    //sql_db_error = true;
     if (sql_db_error==false) {
         printf("SQL-DB succesfully reading node infor from SQL DB....\n");    
     }
     else {
-        printf("SQL-DB error reading node infor from config file....\n");    
+        printf("SQL-DB error: reading node infor from config file....\n");    
         num_of_node =0;
         ptr_file =fopen("node_list.txt","r");
         if (!ptr_file)
@@ -306,6 +317,7 @@ int read_node_list(){
 
 /*------------------------------------------------*/
 int execute_sql_cmd(char *sql) {
+#ifdef USING_SQL_SERVER            
     con = mysql_init(NULL);
     if (con == NULL) {
       finish_with_error(con);
@@ -322,6 +334,7 @@ int execute_sql_cmd(char *sql) {
     }
 
     mysql_close(con);   
+#endif
     return 0;
 }
 /*------------------------------------------------*/
@@ -541,20 +554,20 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            //execute_broadcasd_cmd(CMD_LED_DIM, 170);
-            execute_broadcasd_cmd(CMD_RF_LED_ON,0);
+            execute_broadcasd_cmd(CMD_LED_DIM, 170);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            //execute_broadcasd_cmd(CMD_LED_DIM, 0);
-            execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
+            execute_broadcasd_cmd(CMD_LED_DIM, 0);
+            //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            //execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
-            execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
+            //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_MULTICAST_CMD:
