@@ -48,6 +48,12 @@ struct node_db_struct_t {
 	int			last_cmd;
 	int 		num_of_retrans;
 	char		last_seen[50];
+	char		app_key[16];
+	int 		channel_id;
+	int 		rssi;
+	int 		lqi;
+	int 		pan_id;
+	int		    tx_power;
 };
 
 typedef struct node_db_struct_t		node_db_struct_t;
