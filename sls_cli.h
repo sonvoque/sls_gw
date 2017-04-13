@@ -14,7 +14,7 @@
 
 #define USING_SQL_SERVER_ENABLE	1
 #if (USING_SQL_SERVER_ENABLE)
-#define SLS_USING_CC2538DK
+#define USING_SQL_SERVER
 #endif
 
 #define SLS_LED_HELLO			"led_hello"

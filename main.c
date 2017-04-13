@@ -301,6 +301,7 @@ int read_node_list(){
             return 1;
         while (fgets(buf,1000, ptr_file)!=NULL) {
             sscanf(buf,"%d %s",&node, ipv6_addr);
+            node_db_list[num_of_node].id = node;
             strcpy(node_db_list[node].ipv6_addr, ipv6_addr);
             //printf("node = %d,   ipv6 = %s\n",node, node_db_list[node].ipv6_addr);
             num_of_node++;
