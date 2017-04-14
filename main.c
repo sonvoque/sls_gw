@@ -35,7 +35,7 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    1.5      //seconds
+#define TIME_OUT    2      //seconds
 #define NUM_RETRANSMISSIONS 2
 
 
@@ -171,23 +171,23 @@ void update_sql_db() {
 void show_local_db() { 
     int i;
     printf("\n");
-    printf("|-----------------------------------------LOCAL DATABASE-------------------------------------------------------------|\n");
-    printf("| id |node|       ipv6 address       |con.|req|rep|time| last|retry|      last_seen       |chann|RSSI/LQI| pan |power|\n");
-    printf("|    | id |  (prefix: aaaa::1/64)    |    |   |   |-out| cmd |     |                      |     | (dBm)/ |(hex)|(dBm)|\n");
-    printf("|----|----|--------------------------|----|---|---|----|-----|-----|----------------------|-----|--------|-----|-----|\n");
+    printf("|--------------------------------------------------LOCAL DATABASE---------------------------------------------------------|\n");
+    printf("| id |node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI| pan |power|\n");
+    printf("|    | id |  (prefix: aaaa::1/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel | (dBm)/ |(hex)|(dBm)|\n");
+    printf("|----|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------|-----|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %2d | %24s | %2s |%3d|%3d|%4d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, node_db_list[i].tx_power);  
         else
-            printf("| %2d | %2d | %24s | *%1s |%3d|%3d|%4d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, node_db_list[i].tx_power);
     }
-    printf("|--------------------------------------------------------------------------------------------------------------------|\n");
+    printf("|-------------------------------------------------------------------------------------------------------------------------|\n");
 }
 
 
@@ -597,12 +597,13 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in pi_remaddr;	                    /* remote address */
 	socklen_t pi_addrlen = sizeof(pi_remaddr);		   /* length of addresses */
 	int pi_recvlen;			                            /* # bytes received */
-	int pi_fd;				                         /* our socket */
+	int pi_fd = 0, connfd = 0;				                         /* our socket */
 	int pi_msgcnt = 0;			                      /* count # of messages we received */
 	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
 
 	/* create a UDP socket */
-	if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    //if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	if ((pi_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("cannot create socket\n");
 		return 0;
 	}
@@ -617,66 +618,76 @@ int main(int argc, char* argv[]) {
 		perror("bind failed");
 		return 0;
 	}
-
+    
+    listen(pi_fd, 3); 
     
     /* read node list*/
     read_node_list();
     /* running discovery */
     run_node_discovery();
+    show_local_db();
+    printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+    for (;;) {    
+        // for UDP    
+        //pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
+        connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);
+        if (connfd >= 0)
+            printf("Accept TCP connection\n");
 
-    for (;;) {        
-        show_local_db();
-		printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
-		pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
-		if (pi_recvlen > 0) {
+        // read data from clinet
+		pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
+        if (pi_recvlen > 0) {
 			printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
-  		pi_p = (char *) (&pi_buf); 
-  		pi_cmdPtr = (cmd_struct_t *)pi_p;
-  		pi_rx_reply = *pi_cmdPtr;
+               		
+            pi_p = (char *) (&pi_buf); 
+  		    pi_cmdPtr = (cmd_struct_t *)pi_p;
+  		    pi_rx_reply = *pi_cmdPtr;
 		
-		node_id = pi_cmdPtr->len;
-        rx_reply = *pi_cmdPtr;
+            node_id = pi_cmdPtr->len;
+            rx_reply = *pi_cmdPtr;
 
-		gettimeofday(&t0, 0);
-        if (is_cmd_of_gw(*pi_cmdPtr)==true) {
-            printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            process_gw_cmd(*pi_cmdPtr);
-        }
-        else {  // not command for GW: send to node and wait for a reply
-            printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-            tx_cmd = *pi_cmdPtr;
             gettimeofday(&t0, 0);
-            res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-			gettimeofday(&t1, 0);
-            elapsed = timedifference_msec(t0, t1);
-            printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+            if (is_cmd_of_gw(*pi_cmdPtr)==true) {
+                printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                process_gw_cmd(*pi_cmdPtr);
+            }
+            else {  // not command for GW: send to node and wait for a reply
+                printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                tx_cmd = *pi_cmdPtr;
+                gettimeofday(&t0, 0);
+                res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+		        gettimeofday(&t1, 0);
+                elapsed = timedifference_msec(t0, t1);
+                printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
             
-            /*update local DB */
-            node_db_list[node_id].num_req++;
-            if (res == -1) {
-                printf(" - ERROR: sending process \n");
+                //update local DB
+                node_db_list[node_id].num_req++;
+                if (res == -1) {
+                    printf(" - ERROR: sending process \n");
+                }
+                else if (res == 0)   {
+                    //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
+                    node_db_list[node_id].num_timeout++;
+                    rx_reply.err_code = ERR_TIME_OUT;
+                    rx_reply.type = MSG_TYPE_REP;
+                }
+                else {
+                    //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
+                    node_db_list[node_id].num_rep++;
+                    node_db_list[node_id].last_cmd = tx_cmd.cmd;
+                }            
             }
-            else if (res == 0)   {
-                //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
-                node_db_list[node_id].num_timeout++;
-                rx_reply.err_code = ERR_TIME_OUT;
-                rx_reply.type = MSG_TYPE_REP;
-            }
-            else{
-                //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
-                node_db_list[node_id].num_rep++;
-                node_db_list[node_id].last_cmd = tx_cmd.cmd;
-            }            
+            // send REPLY to sender NODE
+            sprintf(pi_buf, "ACK %d", pi_msgcnt++);
+            printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
+            write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
+            //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
+            //    perror("sendto");
+            show_local_db();
         }
-	}
-	else
-		printf("uh oh - something went wrong!\n");
-	
-    // send REPLY to sender NODE
-	sprintf(pi_buf, "ACK %d", pi_msgcnt++);
-	printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
-	if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
-		perror("sendto");
+        
+        close(connfd);
+        sleep(1);    	
 	}
     return 0;
 }
