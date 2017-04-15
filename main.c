@@ -513,22 +513,24 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
         tx_cmd.err_code = 0;
 
         executed_node = cmd.arg[i+3];               //from arg[3] to...
-        node_db_list[executed_node].num_req++;
-        res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-        if (res == -1) {
-            printf(" - ERROR: broadcast process \n");
-        }
-        else if (res == 0)   {
-            printf(" - Send cmd to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
-            num_timeout++;
-            node_db_list[executed_node].num_timeout++;
-            err_code = ERR_BROADCAST_CMD;
-        }
-        else{
-            printf(" - Send cmd to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
-            num_rep++;
-            node_db_list[executed_node].num_rep++;
-            node_db_list[executed_node].last_cmd = tx_cmd.cmd;            
+        if (executed_node < (num_of_node-1)) {
+            node_db_list[executed_node].num_req++;
+            res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+            if (res == -1) {
+                printf(" - ERROR: broadcast process \n");
+            }
+            else if (res == 0)   {
+                printf(" - Send cmd to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
+                num_timeout++;
+                node_db_list[executed_node].num_timeout++;
+                err_code = ERR_BROADCAST_CMD;
+            }
+            else {
+                printf(" - Send cmd to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
+                num_rep++;
+                node_db_list[executed_node].num_rep++;
+                node_db_list[executed_node].last_cmd = tx_cmd.cmd;            
+            }
         }
     }
     rx_reply.err_code = err_code;
