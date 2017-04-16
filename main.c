@@ -85,6 +85,8 @@ static void show_local_db();
 static void update_sql_db();
 static int execute_broadcasd_cmd(uint8_t cmd, int val);
 static int execute_multicast_cmd(cmd_struct_t cmd);
+static bool is_node_valid(int node);
+static bool is_node_connected(int node);
 
 
 struct timeval t0;
@@ -319,6 +321,19 @@ int read_node_list(){
 }
 
 
+bool is_node_valid(int node) {
+    int i;
+    for (i=0; i<num_of_node; i++) {
+        if (node==node_db_list[i].id)
+            return true;
+    }
+    return false;
+}
+
+bool is_node_connected(int node) {
+    return strcmp(node_db_list[node].connected,"Y");
+}
+
 /*------------------------------------------------*/
 int execute_sql_cmd(char *sql) {
 #ifdef USING_SQL_SERVER            
@@ -345,6 +360,7 @@ int execute_sql_cmd(char *sql) {
 void run_node_discovery(){
     char sql[200];
     int res, i;
+    uint16_t rssi_rx;
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
     for (i = 1; i < num_of_node; i++) {
@@ -365,10 +381,12 @@ void run_node_discovery(){
         else{
             // rx_reply
             node_db_list[i].channel_id = rx_reply.arg[0];
-            node_db_list[i].rssi = rx_reply.arg[1];
-            node_db_list[i].lqi = rx_reply.arg[2];
-            node_db_list[i].tx_power = rx_reply.arg[3];
-            node_db_list[i].pan_id = (rx_reply.arg[4] << 8) | (rx_reply.arg[5]);
+            rssi_rx = rx_reply.arg[1];
+            rssi_rx = (rssi_rx << 8) | rx_reply.arg[2];
+            node_db_list[i].rssi = rssi_rx-200;
+            node_db_list[i].lqi = rx_reply.arg[3];
+            node_db_list[i].tx_power = rx_reply.arg[4];
+            node_db_list[i].pan_id = (rx_reply.arg[5] << 8) | (rx_reply.arg[6]);
             printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
             update_sql_db();
         }
@@ -507,13 +525,14 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     for (i = 0; i < num_multicast_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
         tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.len = 0xFF;      // multi-cast or broadcast
         tx_cmd.cmd = multicast_cmd;     
         tx_cmd.arg[0] = multicast_val1;
         tx_cmd.arg[1] = multicast_val2;        
         tx_cmd.err_code = 0;
 
         executed_node = cmd.arg[i+3];               //from arg[3] to...
-        if (executed_node < (num_of_node-1)) {
+        if (is_node_valid(executed_node)) {
             node_db_list[executed_node].num_req++;
             res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
             if (res == -1) {
@@ -592,7 +611,7 @@ int main(int argc, char* argv[]) {
 // Khoi tao socket cho server de nhan du lieu
     int res;
 
-    clear();
+    //clear();
     init_main();
 
     struct sockaddr_in pi_myaddr;	                      /* our address */
@@ -628,15 +647,16 @@ int main(int argc, char* argv[]) {
     /* running discovery */
     run_node_discovery();
     show_local_db();
+
     printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
     for (;;) {    
         // for UDP    
         //pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
-        connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);
+        connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //TCP
         if (connfd >= 0)
             printf("Accept TCP connection\n");
 
-        // read data from clinet
+        // read data from client
 		pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
         if (pi_recvlen > 0) {
 			printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
@@ -686,6 +706,7 @@ int main(int argc, char* argv[]) {
             //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
             //    perror("sendto");
             show_local_db();
+            printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
         }
         
         close(connfd);
@@ -742,6 +763,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
             printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
+            //print_cmd(tx_cmd);
         }
         else {
             printf("\n2. Forward REQUEST to [%s]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
