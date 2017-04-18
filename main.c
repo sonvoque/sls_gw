@@ -22,6 +22,9 @@
 #include <sys/time.h>
 #include <poll.h>
 #include <time.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/types.h>
 
 //#include <mysql/my_global.h>
 #include <mysql/mysql.h>
@@ -115,6 +118,9 @@ void finish_with_error(MYSQL *con) {
 
 /*------------------------------------------------*/
 void init_main() {
+    pid_t pid;
+    char prog[10];
+
     timeout_val = TIME_OUT;
     strcpy(node_db_list[0].connected,"Y");
     ///update_sql_db();
@@ -364,8 +370,8 @@ void run_node_discovery(){
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
     for (i = 1; i < num_of_node; i++) {
-        tx_cmd.type = MSG_TYPE_REQ;
-        tx_cmd.cmd = CMD_GET_NW_STATUS;
+        tx_cmd.type = MSG_TYPE_HELLO;
+        tx_cmd.cmd = CMD_RF_HELLO;
         tx_cmd.err_code = 0;
         res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
         if (res == -1) {
@@ -610,9 +616,7 @@ int main(int argc, char* argv[]) {
 //-------------------------------------------------------------------------------------------
 // Khoi tao socket cho server de nhan du lieu
     int res;
-
-    //clear();
-    init_main();
+    int option = 1;
 
     struct sockaddr_in pi_myaddr;	                      /* our address */
 	struct sockaddr_in pi_remaddr;	                    /* remote address */
@@ -622,12 +626,15 @@ int main(int argc, char* argv[]) {
 	int pi_msgcnt = 0;			                      /* count # of messages we received */
 	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
 
+    //clear();
+    init_main();
 	/* create a UDP socket */
     //if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 	if ((pi_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("cannot create socket\n");
-		return 0;
+		//return 0;
 	}
+    setsockopt(pi_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 
 	/* bind the socket to any valid IP address and a specific port */
 	memset((char *)&pi_myaddr, 0, sizeof(pi_myaddr));
