@@ -141,6 +141,7 @@ void get_db_row(MYSQL_ROW row, int i) {
     //node_db_list[i].last_cmd    = atoi(row[7]);
     //strcpy(node_db_list[i].last_seen,row[8]);        
     //node_db_list[i].num_of_retrans = atoi(row[9]);
+    strcpy(node_db_list[i].app_key,row[15]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
 
     //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
@@ -156,13 +157,16 @@ void update_sql_db() {
     int i;
     
     for (i=1; i<num_of_node; i++) {
-        if (strcmp(node_db_list[i].connected,"Y")==true) {
+        //printf("node %d has connected = %s \n",i, node_db_list[i].connected);
+        if ((char)node_db_list[i].connected[0]=='Y') {
+            //printf("node %d = 'Y' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
                 node_db_list[i].pan_id, node_db_list[i].tx_power, i);
         }
         else {
+            //printf("node %d = 'N' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
@@ -297,6 +301,7 @@ int read_node_list(){
 
     mysql_free_result(result);
     mysql_close(con);   
+    update_sql_db();
 #else    
     sql_db_error = true;
 #endif    
@@ -327,6 +332,7 @@ int read_node_list(){
 }
 
 
+/*------------------------------------------------*/
 bool is_node_valid(int node) {
     int i;
     for (i=0; i<num_of_node; i++) {
@@ -336,6 +342,7 @@ bool is_node_valid(int node) {
     return false;
 }
 
+/*------------------------------------------------*/
 bool is_node_connected(int node) {
     return strcmp(node_db_list[node].connected,"Y");
 }
@@ -385,6 +392,9 @@ void run_node_discovery(){
             }
         }
         else{
+            sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;", i);
+            if (execute_sql_cmd(sql)==0) {
+            }
             // rx_reply
             node_db_list[i].channel_id = rx_reply.arg[0];
             rssi_rx = rx_reply.arg[1];
@@ -654,6 +664,7 @@ int main(int argc, char* argv[]) {
     /* running discovery */
     run_node_discovery();
     show_local_db();
+    update_sql_db();
 
     printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
     for (;;) {    
@@ -713,6 +724,7 @@ int main(int argc, char* argv[]) {
             //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
             //    perror("sendto");
             show_local_db();
+            update_sql_db();
             printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
         }
         

@@ -48,7 +48,7 @@ struct node_db_struct_t {
 	int			last_cmd;
 	int 		num_of_retrans;
 	char		last_seen[50];
-	char		app_key[16];
+	char		app_key[32];
 	int 		channel_id;
 	int 		rssi;
 	int 		lqi;
