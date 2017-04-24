@@ -46,6 +46,7 @@ struct node_db_struct_t {
 	int			num_rep;
 	int 		num_timeout;
 	int			last_cmd;
+	int 		last_err_code;
 	int 		num_of_retrans;
 	char		last_seen[50];
 	char		app_key[32];

@@ -88,6 +88,7 @@ static void show_local_db();
 static void update_sql_db();
 static int execute_broadcasd_cmd(uint8_t cmd, int val);
 static int execute_multicast_cmd(cmd_struct_t cmd);
+static int execute_broadcast_general_cmd(cmd_struct_t cmd);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 
@@ -124,7 +125,7 @@ void init_main() {
     timeout_val = TIME_OUT;
     strcpy(node_db_list[0].connected,"Y");
     ///update_sql_db();
-    show_sql_db();
+    //show_sql_db();
 }
 
 
@@ -153,24 +154,24 @@ void get_db_row(MYSQL_ROW row, int i) {
 /*------------------------------------------------*/
 void update_sql_db() {
 #ifdef USING_SQL_SERVER    
-    char sql[300];
+    char sql[400];
     int i;
     
     for (i=1; i<num_of_node; i++) {
         //printf("node %d has connected = %s \n",i, node_db_list[i].connected);
         if ((char)node_db_list[i].connected[0]=='Y') {
             //printf("node %d = 'Y' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
-                node_db_list[i].pan_id, node_db_list[i].tx_power, i);
+                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, i);
         }
         else {
             //printf("node %d = 'N' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
-                node_db_list[i].pan_id, node_db_list[i].tx_power, i);
+                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, i);
         }    
         if (execute_sql_cmd(sql)==0){
             //printf("sql_cmd = %s\n", sql);
@@ -183,23 +184,25 @@ void update_sql_db() {
 void show_local_db() { 
     int i;
     printf("\n");
-    printf("|--------------------------------------------------LOCAL DATABASE---------------------------------------------------------|\n");
-    printf("| id |node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI| pan |power|\n");
-    printf("|    | id |  (prefix: aaaa::1/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel | (dBm)/ |(hex)|(dBm)|\n");
-    printf("|----|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------|-----|-----|\n");
+    printf("|--------------------------------------------------LOCAL DATABASE---------------------------------------------------------|--------|\n");
+    printf("| id |node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI| pan |power|err_code|\n");
+    printf("|    | id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel | (dBm)/ |(hex)|(dBm)|  (hex) |\n");
+    printf("|----|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------|-----|-----|--------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d| 0x%04X |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
-                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, node_db_list[i].tx_power);  
+                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, 
+                node_db_list[i].tx_power, node_db_list[i].last_err_code);  
         else
-            printf("| %2d | %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d|\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d| 0x%04X |\n",node_db_list[i].index , node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
-                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, node_db_list[i].tx_power);
+                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, 
+                node_db_list[i].tx_power, node_db_list[i].last_err_code);
     }
-    printf("|-------------------------------------------------------------------------------------------------------------------------|\n");
+    printf("|----------------------------------------------------------------------------------------------------------------------------------|\n");
 }
 
 
@@ -473,6 +476,7 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
             (cmd.cmd==CMD_GW_TURN_OFF_ALL) ||
             (cmd.cmd==CMD_GW_DIM_ALL) ||            
             (cmd.cmd==CMD_GW_SET_TIMEOUT) ||
+            (cmd.cmd==CMD_GW_BROADCAST_CMD) ||            
             (cmd.cmd==CMD_GW_MULTICAST_CMD);
 }
 
@@ -575,6 +579,49 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     return 0;
 }
 
+int execute_broadcast_general_cmd(cmd_struct_t cmd) {
+    int i, num_timeout, res, num_rep;
+    uint16_t err_code;
+    uint8_t broadcast_cmd;
+
+    num_timeout=0;
+    num_rep=0;
+    broadcast_cmd = cmd.arg[0];
+    err_code = ERR_NORMAL;    
+    printf("Executing broadcast command: 0x%02X ...\n", broadcast_cmd);
+
+    for (i = 0; i < num_of_node; i++) {
+        /* prepare tx_cmd to send to RF nodes*/
+        tx_cmd = cmd;
+        tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.len = 0xFF;      // multi-cast or broadcast
+        tx_cmd.cmd = broadcast_cmd;     
+        tx_cmd.err_code = 0;
+
+        node_db_list[i].num_req++;
+        res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+        if (res == -1) {
+            printf(" - ERROR: broadcast process \n");
+        }
+        else if (res == 0)   {
+            printf(" - Send cmd to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+            num_timeout++;
+            node_db_list[i].num_timeout++;
+            err_code = ERR_BROADCAST_CMD;
+        }
+        else {
+            printf(" - Send cmd to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+            num_rep++;
+            node_db_list[i].num_rep++;
+            node_db_list[i].last_cmd = tx_cmd.cmd;            
+        }
+    }
+    rx_reply.err_code = err_code;
+    rx_reply.arg[0] = num_of_node;
+    rx_reply.arg[1] = num_rep;
+    rx_reply.arg[2] = num_timeout;
+    return 0;
+}
 
 /*------------------------------------------------*/
 void process_gw_cmd(cmd_struct_t cmd) {
@@ -617,6 +664,10 @@ void process_gw_cmd(cmd_struct_t cmd) {
         case CMD_GW_MULTICAST_CMD:
             rx_reply.type = MSG_TYPE_REP;
             execute_multicast_cmd(cmd);
+            break;
+        case CMD_GW_BROADCAST_CMD:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_general_cmd(cmd);
             break;
     }
 }
@@ -832,6 +883,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 update_sql_db();
 
                 num_of_retrans = NUM_RETRANSMISSIONS;
+                node_db_list[nodeid].last_err_code = rx_reply.err_code;
                 break;
             }
         } /* while */    
