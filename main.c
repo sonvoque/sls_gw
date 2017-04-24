@@ -87,7 +87,7 @@ static int execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
-static int execute_broadcasd_cmd(uint8_t cmd, int val);
+static int execute_broadcasd_cmd(cmd_struct_t cmd, int val);
 static int execute_multicast_cmd(cmd_struct_t cmd);
 static int execute_broadcast_general_cmd(cmd_struct_t cmd);
 static bool is_node_valid(int node);
@@ -487,19 +487,19 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
-int execute_broadcasd_cmd(uint8_t cmd, int val) {
+int execute_broadcasd_cmd(cmd_struct_t cmd, int val) {
     int i, num_timeout, res, num_rep;
     uint16_t err_code;
 
     num_timeout=0;
     num_rep=0;
-    printf("Executing broadcast command: 0x%02X, arg = %d ...\n", cmd, val);
+    printf("Executing broadcast command: 0x%02X, arg = %d ...\n", cmd.cmd, val);
 
     err_code = ERR_NORMAL;
     for (i = 1; i < num_of_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
-        tx_cmd.type = MSG_TYPE_REQ;
-        tx_cmd.cmd = cmd;     // CMD_LED_ON;
+        tx_cmd.type = cmd.type;
+        tx_cmd.cmd = cmd.cmd;     // CMD_LED_ON;
         tx_cmd.arg[0] = val;
         tx_cmd.err_code = 0;
 
@@ -550,7 +550,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     err_code = ERR_NORMAL;
     for (i = 0; i < num_multicast_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
-        tx_cmd.type = MSG_TYPE_REQ;
+        tx_cmd.type = cmd.type;
         tx_cmd.len = 0xFF;      // multi-cast or broadcast
         tx_cmd.cmd = multicast_cmd;     
         tx_cmd.arg[0] = multicast_val1;
@@ -652,19 +652,19 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, 170);
+            execute_broadcasd_cmd(cmd, 170);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, 0);
+            execute_broadcasd_cmd(cmd, 0);
             //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(CMD_LED_DIM, cmd.arg[0]);
+            execute_broadcasd_cmd(cmd, cmd.arg[0]);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
