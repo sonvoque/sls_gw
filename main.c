@@ -595,7 +595,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
     num_rep=0;
     broadcast_cmd = cmd.arg[0];
     err_code = ERR_NORMAL;    
-    printf("Executing broadcast command: 0x%02X ...\n", broadcast_cmd);
+    printf("Executing broadcast general command: 0x%02X ...\n", broadcast_cmd);
 
     for (i = 1; i < num_of_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
@@ -887,10 +887,12 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 timeinfo = localtime ( &rawtime );
                 strftime(str_time,80,"%x-%I:%M:%S %p", timeinfo);
                 strcpy (node_db_list[nodeid].last_seen, str_time);
-                update_sql_db();
 
-                num_of_retrans = NUM_RETRANSMISSIONS;
                 node_db_list[nodeid].last_err_code = rx_reply.err_code;
+
+                num_of_retrans = retrans;   // exit while loop
+
+                update_sql_db();
                 break;
             }
         } /* while */    
