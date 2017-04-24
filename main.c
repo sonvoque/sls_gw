@@ -38,8 +38,8 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define TIME_OUT    2      //seconds
-#define NUM_RETRANSMISSIONS 2
+#define TIME_OUT    1      //seconds
+#define NUM_RETRANSMISSIONS 1
 
 
 static  int     rev_bytes;
@@ -69,10 +69,11 @@ static  cmd_struct_t  pi_tx_cmd, pi_rx_reply;
 static  cmd_struct_t *pi_cmdPtr;
 static  char *pi_p; 
 
+static  int node_id, num_of_node, timeout_val;
+
 /*prototype definition */
 static void print_cmd();
 static void prepare_cmd();
-static	int node_id, num_of_node, timeout_val;
 
 static int read_node_list();
 static void run_node_discovery();
@@ -132,10 +133,13 @@ void init_main() {
 /*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
 #ifdef USING_SQL_SERVER    
+    if (i==0)
+        strcpy(node_db_list[i].connected,"Y");
+
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
-    strcpy(node_db_list[i].connected,row[3]);
+    //strcpy(node_db_list[i].connected,row[3]);
     //node_db_list[i].num_req     = atoi(row[4]);
     //node_db_list[i].num_rep     = atoi(row[5]);
     //node_db_list[i].num_timeout = atoi(row[6]);
@@ -289,11 +293,8 @@ int read_node_list(){
         printf("Reading DB: sls_db......\n");
     }
 
-    
     num_fields = mysql_num_fields(result);
     MYSQL_ROW row;
-    
-    
     while ((row = mysql_fetch_row(result)))  { 
         //for(int i = 0; i < num_fields; i++)
         //    printf("%s ", row[i] ? row[i] : "NULL");
@@ -301,7 +302,6 @@ int read_node_list(){
         num_of_node++;
     }
     
-
     mysql_free_result(result);
     mysql_close(con);   
     update_sql_db();
@@ -327,13 +327,19 @@ int read_node_list(){
             }
         fclose(ptr_file);
     }
-    
-
     printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
     show_local_db();
     return 0;
 }
 
+/*------------------------------------------------*/
+bool is_broadcast_command(cmd_struct_t cmd) {
+    return cmd.len = 0xFF;
+}
+
+bool is_multicast_command(cmd_struct_t cmd) {
+    return cmd.len = 0xFE;
+}
 
 /*------------------------------------------------*/
 bool is_node_valid(int node) {
@@ -579,6 +585,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     return 0;
 }
 
+/*------------------------------------------------*/
 int execute_broadcast_general_cmd(cmd_struct_t cmd) {
     int i, num_timeout, res, num_rep;
     uint16_t err_code;
@@ -590,7 +597,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
     err_code = ERR_NORMAL;    
     printf("Executing broadcast command: 0x%02X ...\n", broadcast_cmd);
 
-    for (i = 0; i < num_of_node; i++) {
+    for (i = 1; i < num_of_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
         tx_cmd = cmd;
         tx_cmd.type = MSG_TYPE_REQ;
