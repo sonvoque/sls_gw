@@ -17,6 +17,7 @@
 #define USING_SQL_SERVER
 #endif
 
+
 #define SLS_LED_HELLO			"led_hello"
 #define SLS_LED_ON				"led_on"
 #define SLS_LED_OFF				"led_off"
@@ -32,6 +33,7 @@
 #define SLS_GW_HELLO 			"gw_hello"
 #define SLS_REPAIR_ROOT			"nw_repair_root"
 
+#define AUTO_SET_APP_KEY		1
 #define SLS_SET_APP_KEY			"set_app_key"
 #define SLS_GET_APP_KEY			"get_app_key"
 #define SLS_APP_KEY_128 		"CAFEBEAFDEADFEEE0123456789ABCDEF"

@@ -92,6 +92,8 @@ static int execute_multicast_cmd(cmd_struct_t cmd);
 static int execute_broadcast_general_cmd(cmd_struct_t cmd);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
+static void auto_set_app_key();
+static int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max);
 
 
 struct timeval t0;
@@ -154,6 +156,38 @@ void get_db_row(MYSQL_ROW row, int i) {
 #endif
 }
 
+/*------------------------------------------------*/
+void auto_set_app_key() {
+    int res, i, j;
+    unsigned char byte_array[16];
+
+    printf("\n\n Auto set app key process.....\n");
+    for (i = 1; i < num_of_node; i++) {
+        if (is_node_connected(i)) {
+            tx_cmd.cmd = CMD_SET_APP_KEY;    
+            tx_cmd.type = MSG_TYPE_HELLO;
+            tx_cmd.err_code = 0;
+            convert(node_db_list[i].app_key, byte_array, 16);
+            //printf("Node %d key = %s \n", i, node_db_list[i].app_key );
+            for (j = 0; j<16; j++) {
+                tx_cmd.arg[j] = byte_array[j];
+            }
+
+            res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
+            if (res == -1) {
+                printf(" - ERROR: discovery process \n");
+            }
+            else if (res == 0)   {
+                printf(" - Set App Key for node %d [%s] failed \n", i, node_db_list[i].ipv6_addr);   
+            }
+            /*
+            else {
+                printf(" - Set App Key for node %d [%s] succesful \n", i, node_db_list[i].ipv6_addr);   
+            }
+            */
+        }    
+    }
+}
 
 /*------------------------------------------------*/
 void update_sql_db() {
@@ -163,7 +197,7 @@ void update_sql_db() {
     
     for (i=1; i<num_of_node; i++) {
         //printf("node %d has connected = %s \n",i, node_db_list[i].connected);
-        if ((char)node_db_list[i].connected[0]=='Y') {
+        if (is_node_connected(i)) {
             //printf("node %d = 'Y' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
@@ -353,7 +387,7 @@ bool is_node_valid(int node) {
 
 /*------------------------------------------------*/
 bool is_node_connected(int node) {
-    return strcmp(node_db_list[node].connected,"Y");
+    return (char)node_db_list[node].connected[0]=='Y';
 }
 
 /*------------------------------------------------*/
@@ -719,8 +753,14 @@ int main(int argc, char* argv[]) {
     
     /* read node list*/
     read_node_list();
+
     /* running discovery */
     run_node_discovery();
+
+#ifdef AUTO_SET_APP_KEY
+    auto_set_app_key();
+#endif
+
     show_local_db();
     update_sql_db();
 
@@ -806,7 +846,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
 
     sin6len = sizeof(struct sockaddr_in6);
 
-    print_cmd(tx_cmd);
+    //print_cmd(tx_cmd);
     strcpy(dst_ipv6addr,node_db_list[nodeid].ipv6_addr);
     sprintf(str_port,"%d",port);
 
@@ -877,10 +917,10 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 cmdPtr = (cmd_struct_t *)p;
                 rx_reply = *cmdPtr;
 
-                print_cmd(rx_reply);
-                /*update local DB*/
-                //node_db_list[nodeid].tx_rep++;
+                //print_cmd(rx_reply);
+
                 strcpy(node_db_list[nodeid].connected,"Y");
+                node_db_list[nodeid].last_err_code = rx_reply.err_code;
                 node_db_list[nodeid].num_of_retrans = num_of_retrans;
 
                 time(&rawtime );
@@ -888,10 +928,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 strftime(str_time,80,"%x-%I:%M:%S %p", timeinfo);
                 strcpy (node_db_list[nodeid].last_seen, str_time);
 
-                node_db_list[nodeid].last_err_code = rx_reply.err_code;
-
                 num_of_retrans = retrans;   // exit while loop
-
                 update_sql_db();
                 break;
             }
