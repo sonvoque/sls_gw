@@ -87,7 +87,7 @@ static int execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
-static int execute_broadcasd_cmd(cmd_struct_t cmd, int val);
+static int execute_broadcast_cmd(cmd_struct_t cmd, int val);
 static int execute_multicast_cmd(cmd_struct_t cmd);
 static int execute_broadcast_general_cmd(cmd_struct_t cmd);
 static bool is_node_valid(int node);
@@ -174,16 +174,13 @@ void auto_set_app_key() {
             }
 
             res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
-            if (res == -1) {
+            if (res == -1)
                 printf(" - ERROR: discovery process \n");
-            }
-            else if (res == 0)   {
+            else if (res == 0)
                 printf(" - Set App Key for node %d [%s] failed \n", i, node_db_list[i].ipv6_addr);   
-            }
             /*
-            else {
+            else
                 printf(" - Set App Key for node %d [%s] succesful \n", i, node_db_list[i].ipv6_addr);   
-            }
             */
         }    
     }
@@ -521,7 +518,7 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
-int execute_broadcasd_cmd(cmd_struct_t cmd, int val) {
+int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
     int i, num_timeout, res, num_rep;
     uint16_t err_code;
 
@@ -621,7 +618,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
 
 /*------------------------------------------------*/
 int execute_broadcast_general_cmd(cmd_struct_t cmd) {
-    int i, num_timeout, res, num_rep;
+    int i,j, num_timeout, res, num_rep;
     uint16_t err_code;
     uint8_t broadcast_cmd;
 
@@ -638,6 +635,9 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
         tx_cmd.len = 0xFF;      // multi-cast or broadcast
         tx_cmd.cmd = broadcast_cmd;     
         tx_cmd.err_code = 0;
+        for (j = 0; j < (MAX_CMD_DATA_LEN-1); j++) {    
+            tx_cmd.arg[j] = cmd.arg[j+1];
+        }
 
         node_db_list[i].num_req++;
         res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
@@ -686,19 +686,19 @@ void process_gw_cmd(cmd_struct_t cmd) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(cmd, 170);
+            execute_broadcast_cmd(cmd, 170);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(cmd, 0);
+            execute_broadcast_cmd(cmd, 0);
             //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcasd_cmd(cmd, cmd.arg[0]);
+            execute_broadcast_cmd(cmd, cmd.arg[0]);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
