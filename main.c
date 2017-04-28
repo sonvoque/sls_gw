@@ -60,7 +60,7 @@ int res;
 
 static  char    dst_ipv6addr_list[40][50];
 
-static  cmd_struct_t  tx_cmd, rx_reply;
+static  cmd_struct_t  tx_cmd, rx_reply, emergency_reply;
 static  cmd_struct_t *cmdPtr;
 static  char *p;
 
@@ -558,6 +558,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
     rx_reply.arg[2] = num_timeout;
 }
 
+/*------------------------------------------------*/
 int execute_multicast_cmd(cmd_struct_t cmd) {
     int num_multicast_node, multicast_val1, multicast_val2;
     int i, num_timeout, res, num_rep, executed_node;
@@ -714,9 +715,8 @@ void process_gw_cmd(cmd_struct_t cmd) {
 }
 
 
-int main(int argc, char* argv[]) {
 //-------------------------------------------------------------------------------------------
-// Khoi tao socket cho server de nhan du lieu
+int main(int argc, char* argv[]) {
     int res;
     int option = 1;
 
@@ -727,6 +727,13 @@ int main(int argc, char* argv[]) {
 	int pi_fd = 0, connfd = 0;				                         /* our socket */
 	int pi_msgcnt = 0;			                      /* count # of messages we received */
 	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
+    char buffer[MAXBUF];
+
+    int emergency_sock;
+    int emergency_status;
+    struct sockaddr_in6 sin6;
+    int sin6len;
+    int timeout = 0.2;
 
     //clear();
     init_main();
@@ -764,74 +771,130 @@ int main(int argc, char* argv[]) {
     show_local_db();
     update_sql_db();
 
+
+
+    // setting UDP/IPv6 socket for emergency msg
+    emergency_sock = socket(PF_INET6, SOCK_DGRAM,0);
+    sin6len = sizeof(struct sockaddr_in6);
+    memset(&sin6, 0, sin6len);
+    /* just use the first address returned in the structure */
+    sin6.sin6_port = htons(SLS_EMERGENCY_PORT);
+    sin6.sin6_family = AF_INET6;
+    sin6.sin6_addr = in6addr_any;
+    emergency_status = bind(emergency_sock, (struct sockaddr *)&sin6, sin6len);
+    if (-1 == emergency_status)
+        perror("bind"), exit(1);
+    emergency_status = getsockname(emergency_sock, (struct sockaddr *)&sin6, &sin6len);
+    //printf("Gateway emergency_sock port for emergency: %d\n", ntohs(sin6.sin6_port));
+
+
+    // main loop
     printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+    printf("\n IV. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
     for (;;) {    
+        // waiting for EMERGENCY msg
+        //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
+        fd.fd = emergency_sock;
+        fd.events = POLLIN;
+        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        if (res >0) {
+            emergency_status = recvfrom(emergency_sock, buffer, MAXBUF, 0,(struct sockaddr *)&sin6, &sin6len);
+            if (emergency_status>0) {
+                p = (char *) (&buffer); 
+                cmdPtr = (cmd_struct_t *)p;
+                emergency_reply = *cmdPtr;
+                inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
+                if (emergency_reply.err_code = ERR_EMERGENCY) {
+                    printf("- Got a emergency msg [%d] bytes] from %s \n", emergency_status, buffer);
+                    printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);                
+                }
+            }
+        }
+        //close(emergency_sock);
+        sleep(1);        
+
+
+        // waiting for command from software
         // for UDP    
         //pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
-        connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //TCP
-        if (connfd >= 0)
-            printf("Accept TCP connection\n");
 
-        // read data from client
-		pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
-        if (pi_recvlen > 0) {
-			printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
-               		
-            pi_p = (char *) (&pi_buf); 
-  		    pi_cmdPtr = (cmd_struct_t *)pi_p;
-  		    pi_rx_reply = *pi_cmdPtr;
-		
-            node_id = pi_cmdPtr->len;
-            rx_reply = *pi_cmdPtr;
-
-            gettimeofday(&t0, 0);
-            if (is_cmd_of_gw(*pi_cmdPtr)==true) {
-                printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-                process_gw_cmd(*pi_cmdPtr);
-            }
-            else {  // not command for GW: send to node and wait for a reply
-                printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-                tx_cmd = *pi_cmdPtr;
-                gettimeofday(&t0, 0);
-                res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-		        gettimeofday(&t1, 0);
-                elapsed = timedifference_msec(t0, t1);
-                printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+        //printf("\n2. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+        fd.fd = pi_fd;
+        fd.events = POLLIN;
+        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        if (res>0) {
+            connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //TCP
+            if (connfd >= 0)
+                printf("Accept TCP connection....\n");
+        }
             
-                //update local DB
-                node_db_list[node_id].num_req++;
-                if (res == -1) {
-                    printf(" - ERROR: sending process \n");
+        // read data from client
+        fd.fd = connfd;
+        fd.events = POLLIN;
+        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        if (res >0) {
+            pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
+            if (pi_recvlen > 0) {
+                printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
+               		
+                pi_p = (char *) (&pi_buf); 
+  		        pi_cmdPtr = (cmd_struct_t *)pi_p;
+  		        pi_rx_reply = *pi_cmdPtr;
+		
+                node_id = pi_cmdPtr->len;
+                rx_reply = *pi_cmdPtr;
+
+                gettimeofday(&t0, 0);
+                if (is_cmd_of_gw(*pi_cmdPtr)==true) {
+                    printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                    process_gw_cmd(*pi_cmdPtr);
                 }
-                else if (res == 0)   {
-                    //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
-                    node_db_list[node_id].num_timeout++;
-                    rx_reply.err_code = ERR_TIME_OUT;
-                    rx_reply.type = MSG_TYPE_REP;
+                else {  // not command for GW: send to node and wait for a reply
+                    printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                    tx_cmd = *pi_cmdPtr;
+                    gettimeofday(&t0, 0);
+                    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+                    gettimeofday(&t1, 0);
+                    elapsed = timedifference_msec(t0, t1);
+                    printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+            
+                    //update local DB
+                    node_db_list[node_id].num_req++;
+                    if (res == -1) {
+                        printf(" - ERROR: sending process \n");
+                    }
+                    else if (res == 0)   {
+                        //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
+                        node_db_list[node_id].num_timeout++;
+                        rx_reply.err_code = ERR_TIME_OUT;
+                        rx_reply.type = MSG_TYPE_REP;
+                    }
+                    else {
+                        //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
+                        node_db_list[node_id].num_rep++;
+                        node_db_list[node_id].last_cmd = tx_cmd.cmd;
+                    }            
                 }
-                else {
-                    //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
-                    node_db_list[node_id].num_rep++;
-                    node_db_list[node_id].last_cmd = tx_cmd.cmd;
-                }            
+                // send REPLY to sender NODE
+                sprintf(pi_buf, "ACK %d", pi_msgcnt++);
+                printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
+                write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
+                //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
+                //    perror("sendto");
+                show_local_db();
+                update_sql_db();
+                //printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
             }
-            // send REPLY to sender NODE
-            sprintf(pi_buf, "ACK %d", pi_msgcnt++);
-            printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
-            write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
-            //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
-            //    perror("sendto");
-            show_local_db();
-            update_sql_db();
-            printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
         }
         
         close(connfd);
-        sleep(1);    	
+        sleep(1);   
+
 	}
     return 0;
 }
 
+//-------------------------------------------------------------------------------------------
 int ip6_send_cmd(int nodeid, int port, int retrans) {
     int sock;
     int status, i;
@@ -845,17 +908,15 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
     int num_of_retrans;
 
     sin6len = sizeof(struct sockaddr_in6);
-
-    //print_cmd(tx_cmd);
     strcpy(dst_ipv6addr,node_db_list[nodeid].ipv6_addr);
     sprintf(str_port,"%d",port);
 
+    //print_cmd(tx_cmd);
     //printf("ipv6_send: node = %d, ipv6= %s\n",nodeid, dst_ipv6addr);  
     prepare_cmd();
-
     strtok(buffer, "\n");
-    sock = socket(PF_INET6, SOCK_DGRAM,0);
 
+    sock = socket(PF_INET6, SOCK_DGRAM,0);
     memset(&sin6, 0, sizeof(struct sockaddr_in6));
     sin6.sin6_port = htons(port);
     sin6.sin6_family = AF_INET6;
@@ -918,7 +979,6 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 rx_reply = *cmdPtr;
 
                 //print_cmd(rx_reply);
-
                 strcpy(node_db_list[nodeid].connected,"Y");
                 node_db_list[nodeid].last_err_code = rx_reply.err_code;
                 node_db_list[nodeid].num_of_retrans = num_of_retrans;
