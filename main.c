@@ -714,6 +714,16 @@ void process_gw_cmd(cmd_struct_t cmd) {
     }
 }
 
+int find_node(char *ip_addr) {
+    int i;
+    for (i=1; i<num_of_node; i++) {
+        if (strcmp(node_db_list[i].ipv6_addr,ip_addr)==0) {
+            //printf("i= %d; node_id = %d \n",i, node_db_list[i].id);
+            return node_db_list[i].id;
+        }
+    }
+    return 0;
+}
 
 //-------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
@@ -729,6 +739,7 @@ int main(int argc, char* argv[]) {
 	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
     char buffer[MAXBUF];
 
+    int emergency_node;
     int emergency_sock;
     int emergency_status;
     struct sockaddr_in6 sin6;
@@ -790,13 +801,13 @@ int main(int argc, char* argv[]) {
 
     // main loop
     printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
-    printf("\n IV. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
+    printf("\nIV. GATEWAY WAITING on PORT %d for EMERGENCY MSG\n", SLS_EMERGENCY_PORT);
     for (;;) {    
         // waiting for EMERGENCY msg
         //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
         fd.fd = emergency_sock;
         fd.events = POLLIN;
-        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        res = poll(&fd, 1, timeout*1000);
         if (res >0) {
             emergency_status = recvfrom(emergency_sock, buffer, MAXBUF, 0,(struct sockaddr *)&sin6, &sin6len);
             if (emergency_status>0) {
@@ -804,14 +815,16 @@ int main(int argc, char* argv[]) {
                 cmdPtr = (cmd_struct_t *)p;
                 emergency_reply = *cmdPtr;
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
+                emergency_node = find_node(buffer);
                 if (emergency_reply.err_code = ERR_EMERGENCY) {
-                    printf("- Got a emergency msg [%d] bytes] from %s \n", emergency_status, buffer);
-                    printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);                
+                    printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                    //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);                
+                    node_db_list[emergency_node].num_emergency_msg++;
                 }
             }
         }
         //close(emergency_sock);
-        sleep(1);        
+        //sleep(1);        
 
 
         // waiting for command from software
@@ -879,10 +892,10 @@ int main(int argc, char* argv[]) {
                 sprintf(pi_buf, "ACK %d", pi_msgcnt++);
                 printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
                 write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
-                //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
-                //    perror("sendto");
                 show_local_db();
                 update_sql_db();
+                //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
+                //    perror("sendto");
                 //printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
             }
         }

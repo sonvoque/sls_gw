@@ -57,7 +57,7 @@ struct node_db_struct_t {
 	int 		lqi;
 	int 		pan_id;
 	int		    tx_power;
-	//int 		emer_err_code;
+	int 		num_emergency_msg;
 };
 
 typedef struct node_db_struct_t		node_db_struct_t;
