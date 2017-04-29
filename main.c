@@ -219,25 +219,25 @@ void update_sql_db() {
 void show_local_db() { 
     int i;
     printf("\n");
-    printf("|--------------------------------------------------LOCAL DATABASE---------------------------------------------------------|--------|\n");
-    printf("| id |node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI| pan |power|err_code|\n");
-    printf("|    | id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel | (dBm)/ |(hex)|(dBm)|  (hex) |\n");
-    printf("|----|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------|-----|-----|--------|\n");
+    printf("|--------------------------------------------------LOCAL DATABASE-------------------------------------------------------------|\n");
+    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI/power|emger|err_code|\n");
+    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel |(dBm)/  /(dBm)|gency|  (hex) |\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------------|-----|--------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d| 0x%04X |\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
-                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, 
-                node_db_list[i].tx_power, node_db_list[i].last_err_code);  
+                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
+                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);  
         else
-            printf("| %2d | %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u|%5X|%5d| 0x%04X |\n",node_db_list[i].index , node_db_list[i].id,
+            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
-                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].pan_id, 
-                node_db_list[i].tx_power, node_db_list[i].last_err_code);
+                node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
+                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);
     }
-    printf("|----------------------------------------------------------------------------------------------------------------------------------|\n");
+    printf("|-----------------------------------------------------------------------------------------------------------------------------|\n");
 }
 
 
@@ -560,24 +560,27 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
 
 /*------------------------------------------------*/
 int execute_multicast_cmd(cmd_struct_t cmd) {
-    int num_multicast_node, multicast_val1, multicast_val2;
-    int i, num_timeout, res, num_rep, executed_node;
+    uint8_t num_multicast_node, max_data_of_cmd;
+    uint8_t i,j, num_timeout, res, num_rep, executed_node;
     uint16_t err_code;
     uint8_t multicast_cmd;
 
+
+    /*  data = 20 
+        multicast_cmd = data[0];
+        multicast_data = data[1..6]
+        multicast_node = data [7..19] */
+
+    max_data_of_cmd = 6;    
     num_multicast_node = cmd.len;
-    if (num_multicast_node>=num_of_node) {
-        printf("Invalid number of multicast nodes....\n");
+    if (num_multicast_node > 13) {
+        printf("Invalid number of multicast nodes, max = %d....\n", MAX_CMD_DATA_LEN-max_data_of_cmd-1);
         return 1;
     }
-
     multicast_cmd = cmd.arg[0];
-    multicast_val1 = cmd.arg[1];
-    multicast_val2 = cmd.arg[2];
-
     num_timeout=0;
     num_rep=0;
-    printf("Executing multicast command: 0x%02X, arg = [%d,%d] ...\n", multicast_cmd, multicast_val1,multicast_val2);
+    printf("Executing multicast command: 0x%02X...\n", multicast_cmd);
 
     err_code = ERR_NORMAL;
     for (i = 0; i < num_multicast_node; i++) {
@@ -585,11 +588,11 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
         tx_cmd.type = cmd.type;
         tx_cmd.len = 0xFF;      // multi-cast or broadcast
         tx_cmd.cmd = multicast_cmd;     
-        tx_cmd.arg[0] = multicast_val1;
-        tx_cmd.arg[1] = multicast_val2;        
-        tx_cmd.err_code = 0;
+        for (j=0; j<max_data_of_cmd; j++)
+            tx_cmd.arg[j] = cmd.arg[j+1];
 
-        executed_node = cmd.arg[i+3];               //from arg[3] to...
+        tx_cmd.err_code = 0;
+        executed_node = cmd.arg[i+max_data_of_cmd+1];               //from arg[7] to...
         if (is_node_valid(executed_node)) {
             node_db_list[executed_node].num_req++;
             res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
