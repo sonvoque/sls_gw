@@ -42,21 +42,21 @@
 #define NUM_RETRANSMISSIONS 1
 
 
-static  int     rev_bytes;
 static  struct  sockaddr_in6 rev_sin6;
 static  int     rev_sin6len;
-static  char    rev_buffer[MAXBUF];
-static  int     port;
-static  char    dst_ipv6addr[50];
 static  char    str_port[5];
+
+static  int     rev_bytes;
+static  char    rev_buffer[MAXBUF];
+static  char    dst_ipv6addr[50];
 static  char    cmd[20];
 static  char    arg[32];
 
 static node_db_struct_t node_db;
 static node_db_struct_t node_db_list[100]; 
 
-struct pollfd fd;
-int res;
+struct  pollfd fd;
+int     res;
 
 static  char    dst_ipv6addr_list[40][50];
 
@@ -80,21 +80,22 @@ static void run_node_discovery();
 static int ip6_send_cmd (int nodeid, int port, int retrans);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
-static void process_gw_cmd(cmd_struct_t cmd);
+static void process_gw_cmd(cmd_struct_t cmd, int nodeid);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
 static int execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
+static void update_sql_row(int nodeid);
 static int execute_broadcast_cmd(cmd_struct_t cmd, int val);
 static int execute_multicast_cmd(cmd_struct_t cmd);
 static int execute_broadcast_general_cmd(cmd_struct_t cmd);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 static void auto_set_app_key();
-static int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max);
-
+static int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
+static void convert_array2str(unsigned char *bin, unsigned int binsz, char **result);
 
 struct timeval t0;
 struct timeval t1;
@@ -167,7 +168,7 @@ void auto_set_app_key() {
             tx_cmd.cmd = CMD_SET_APP_KEY;    
             tx_cmd.type = MSG_TYPE_HELLO;
             tx_cmd.err_code = 0;
-            convert(node_db_list[i].app_key, byte_array, 16);
+            convert_str2array(node_db_list[i].app_key, byte_array, 16);
             //printf("Node %d key = %s \n", i, node_db_list[i].app_key );
             for (j = 0; j<16; j++) {
                 tx_cmd.arg[j] = byte_array[j];
@@ -186,27 +187,73 @@ void auto_set_app_key() {
     }
 }
 
+
+void update_sql_row(int nodeid) {
+#ifdef USING_SQL_SERVER    
+    char sql[400];
+    int i;
+
+    char *result;
+    char buf[MAX_CMD_DATA_LEN];
+
+    memcpy(buf, &node_db_list[nodeid].last_emergency_msg, 20);    
+    convert_array2str(buf, sizeof(buf), &result);    
+    //printf("\nresult : %s\n", result);
+
+    if (is_node_connected(nodeid)) {
+        sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+                node_db_list[nodeid].num_req, node_db_list[nodeid].num_rep, node_db_list[nodeid].num_timeout, node_db_list[nodeid].last_cmd, 
+                node_db_list[nodeid].last_seen, node_db_list[nodeid].num_of_retrans, node_db_list[nodeid].channel_id, node_db_list[nodeid].rssi, node_db_list[nodeid].lqi, 
+                node_db_list[nodeid].pan_id, node_db_list[nodeid].tx_power,node_db_list[nodeid].last_err_code, 
+                node_db_list[nodeid].num_emergency_msg, result, nodeid);
+    }
+    else {
+        sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+                node_db_list[nodeid].num_req, node_db_list[nodeid].num_rep, node_db_list[nodeid].num_timeout, node_db_list[nodeid].last_cmd, 
+                node_db_list[nodeid].last_seen, node_db_list[nodeid].num_of_retrans, node_db_list[nodeid].channel_id, node_db_list[nodeid].rssi, node_db_list[nodeid].lqi, 
+                node_db_list[nodeid].pan_id, node_db_list[nodeid].tx_power,node_db_list[nodeid].last_err_code, 
+                node_db_list[nodeid].num_emergency_msg, result, nodeid);
+    }    
+    if (execute_sql_cmd(sql)==0){
+        //printf("sql_cmd = %s\n", sql);
+    }    
+
+    free(result);    
+#endif    
+}
+
 /*------------------------------------------------*/
 void update_sql_db() {
 #ifdef USING_SQL_SERVER    
     char sql[400];
     int i;
-    
+
+    char *result;
+    char buf[MAX_CMD_DATA_LEN];
+    //convert_array2str(buf, sizeof(buf), &result);
+    //printf("result : %s\n", result);
+    //free(result);    
+
+
     for (i=1; i<num_of_node; i++) {
         //printf("node %d has connected = %s \n",i, node_db_list[i].connected);
+        memcpy(buf, &node_db_list[i].last_emergency_msg, 20);    
+        convert_array2str(buf, sizeof(buf), &result);    
+        //printf("\nresult : %s\n", result);
+
         if (is_node_connected(i)) {
             //printf("node %d = 'Y' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
-                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, i);
+                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
         }
         else {
             //printf("node %d = 'N' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
-                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, i);
+                node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
         }    
         if (execute_sql_cmd(sql)==0){
             //printf("sql_cmd = %s\n", sql);
@@ -444,9 +491,9 @@ void run_node_discovery(){
             node_db_list[i].tx_power = rx_reply.arg[4];
             node_db_list[i].pan_id = (rx_reply.arg[5] << 8) | (rx_reply.arg[6]);
             printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
-            update_sql_db();
         }
     }
+    update_sql_db();    
 }
 /*------------------------------------------------*/
 void prepare_cmd() {
@@ -471,8 +518,26 @@ void print_cmd(cmd_struct_t command) {
 }  
 
 
+
 /*------------------------------------------------*/
-int convert(const char *hex_str, unsigned char *byte_array, int byte_array_max) {
+void convert_array2str(unsigned char *bin, unsigned int binsz, char **result) {
+    char hex_str[]= "0123456789ABCDEF";
+    unsigned int  i;
+
+    *result = (char *)malloc(binsz * 2 + 1);
+    (*result)[binsz * 2] = 0;
+
+    if (!binsz)
+        return;
+
+    for (i = 0; i < binsz; i++) {
+        (*result)[i * 2 + 0] = hex_str[(bin[i] >> 4) & 0x0F];
+        (*result)[i * 2 + 1] = hex_str[(bin[i]     ) & 0x0F];
+    }  
+}
+
+/*------------------------------------------------*/
+int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max) {
     int hex_str_len = strlen(hex_str);
     int i = 0, j = 0;
     // The output array size is half the hex_str length (rounded up)
@@ -514,6 +579,7 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
             (cmd.cmd==CMD_GW_DIM_ALL) ||            
             (cmd.cmd==CMD_GW_SET_TIMEOUT) ||
             (cmd.cmd==CMD_GW_BROADCAST_CMD) ||            
+            (cmd.cmd==CMD_GW_GET_EMER_INFO) ||            
             (cmd.cmd==CMD_GW_MULTICAST_CMD);
 }
 
@@ -524,7 +590,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
 
     num_timeout=0;
     num_rep=0;
-    printf("Executing broadcast command: 0x%02X, arg = %d ...\n", cmd.cmd, val);
+    printf("Executing broadcast CMD: 0x%02X, arg = %d ...\n", cmd.cmd, val);
 
     err_code = ERR_NORMAL;
     for (i = 1; i < num_of_node; i++) {
@@ -540,13 +606,13 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
             printf(" - ERROR: broadcast process \n");
         }
         else if (res == 0)   {
-            printf(" - Send cmd to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+            printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
             num_timeout++;
             node_db_list[i].num_timeout++;
             err_code = ERR_BROADCAST_CMD;
         }
         else{
-            printf(" - Send cmd to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+            printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
             num_rep++;
             node_db_list[i].num_rep++;
             node_db_list[i].last_cmd = tx_cmd.cmd;            
@@ -669,7 +735,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
-void process_gw_cmd(cmd_struct_t cmd) {
+void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
     switch (cmd.cmd) {
         case CMD_GW_HELLO:
             rx_reply.type = MSG_TYPE_REP;
@@ -714,9 +780,15 @@ void process_gw_cmd(cmd_struct_t cmd) {
             rx_reply.type = MSG_TYPE_REP;
             execute_broadcast_general_cmd(cmd);
             break;
+
+        case CMD_GW_GET_EMER_INFO:
+            rx_reply.type = MSG_TYPE_REP;
+            memcpy(&rx_reply.arg, &node_db_list[nodeid].last_emergency_msg, MAX_CMD_DATA_LEN);
+            break;            
     }
 }
 
+/*------------------------------------------------*/
 int find_node(char *ip_addr) {
     int i;
     for (i=1; i<num_of_node; i++) {
@@ -738,8 +810,8 @@ int main(int argc, char* argv[]) {
 	socklen_t pi_addrlen = sizeof(pi_remaddr);		   /* length of addresses */
 	int pi_recvlen;			                            /* # bytes received */
 	int pi_fd = 0, connfd = 0;				                         /* our socket */
-	int pi_msgcnt = 0;			                      /* count # of messages we received */
-	unsigned char pi_buf[BUFSIZE];	                    /* receive buffer */
+	int pi_msgcnt = 0;			                          /* count # of messages we received */
+	unsigned char pi_buf[BUFSIZE];	                        /* receive buffer */
     char buffer[MAXBUF];
 
     int emergency_node;
@@ -747,9 +819,11 @@ int main(int argc, char* argv[]) {
     int emergency_status;
     struct sockaddr_in6 sin6;
     int sin6len;
-    int timeout = 0.2;
+    int timeout = 0.2;      //200ms
 
-    //clear();
+
+
+    clear();
     init_main();
 	/* create a UDP socket */
     //if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -782,8 +856,8 @@ int main(int argc, char* argv[]) {
     auto_set_app_key();
 #endif
 
-    show_local_db();
     update_sql_db();
+    show_local_db();
 
 
 
@@ -823,6 +897,10 @@ int main(int argc, char* argv[]) {
                     printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);                
                     node_db_list[emergency_node].num_emergency_msg++;
+                    memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
+                    
+                    update_sql_row(emergency_node);
+                    show_local_db();
                 }
             }
         }
@@ -837,7 +915,7 @@ int main(int argc, char* argv[]) {
         //printf("\n2. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
         fd.fd = pi_fd;
         fd.events = POLLIN;
-        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        res = poll(&fd, 1, timeout*1000);   
         if (res>0) {
             connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //TCP
             if (connfd >= 0)
@@ -847,7 +925,7 @@ int main(int argc, char* argv[]) {
         // read data from client
         fd.fd = connfd;
         fd.events = POLLIN;
-        res = poll(&fd, 1, timeout*1000);   // timeout=2s
+        res = poll(&fd, 1, timeout*1000); 
         if (res >0) {
             pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
             if (pi_recvlen > 0) {
@@ -863,7 +941,7 @@ int main(int argc, char* argv[]) {
                 gettimeofday(&t0, 0);
                 if (is_cmd_of_gw(*pi_cmdPtr)==true) {
                     printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
-                    process_gw_cmd(*pi_cmdPtr);
+                    process_gw_cmd(*pi_cmdPtr, node_id);
                 }
                 else {  // not command for GW: send to node and wait for a reply
                     printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
@@ -896,16 +974,15 @@ int main(int argc, char* argv[]) {
                 printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
                 write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
                 show_local_db();
-                update_sql_db();
+                update_sql_row(node_id);
                 //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
                 //    perror("sendto");
-                //printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+                printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
             }
         }
         
         close(connfd);
         sleep(1);   
-
 	}
     return 0;
 }
@@ -983,7 +1060,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
             timeinfo = localtime ( &rawtime );
             strftime(str_time,80,"%x-%I:%M:%S %p", timeinfo);
             strcpy (node_db_list[nodeid].last_seen, str_time);
-            update_sql_db();
+            update_sql_row(nodeid);
         }
         else{
             // implies (fd.revents & POLLIN) != 0
@@ -1005,7 +1082,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 strcpy (node_db_list[nodeid].last_seen, str_time);
 
                 num_of_retrans = retrans;   // exit while loop
-                update_sql_db();
+                update_sql_row(nodeid);
                 break;
             }
         } /* while */    

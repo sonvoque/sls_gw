@@ -64,6 +64,7 @@ SLS_CC2538DK_HW = 2 : for compiling to CC2530DK  */
 typedef enum {false=0, true=1} bool;
 
 #define DEFAULT_EMERGENCY_STATUS true
+#define EMERGENCY_TIME  30
 
 enum {	
 	// msg type
@@ -101,6 +102,7 @@ enum {
 	CMD_GW_SET_TIMEOUT		= 0xED,
 	CMD_GW_MULTICAST_CMD	= 0xEC,
 	CMD_GW_BROADCAST_CMD	= 0xEB,
+	CMD_GW_GET_EMER_INFO	= 0xEA,
 
 
 	CMD_LED_PING			= 0x01,
