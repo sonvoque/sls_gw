@@ -230,10 +230,6 @@ void update_sql_db() {
 
     char *result;
     char buf[MAX_CMD_DATA_LEN];
-    //convert_array2str(buf, sizeof(buf), &result);
-    //printf("result : %s\n", result);
-    //free(result);    
-
 
     for (i=1; i<num_of_node; i++) {
         //printf("node %d has connected = %s \n",i, node_db_list[i].connected);
@@ -604,12 +600,13 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
         res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
         if (res == -1) {
             printf(" - ERROR: broadcast process \n");
+            err_code = ERR_BROADCAST_CMD;
         }
         else if (res == 0)   {
             printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
             num_timeout++;
             node_db_list[i].num_timeout++;
-            err_code = ERR_BROADCAST_CMD;
+            err_code = ERR_TIME_OUT;
         }
         else{
             printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
@@ -622,26 +619,26 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
     rx_reply.arg[0] = num_of_node-1;
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
+
+    return 0;
 }
 
 /*------------------------------------------------*/
 int execute_multicast_cmd(cmd_struct_t cmd) {
-    uint8_t num_multicast_node, max_data_of_cmd;
-    uint8_t i,j, num_timeout, res, num_rep, executed_node;
-    uint16_t err_code;
-    uint8_t multicast_cmd;
+    uint8_t     num_multicast_node, max_data_of_cmd;
+    uint8_t     i,j, num_timeout, res, num_rep, executed_node;
+    uint16_t    err_code;
+    uint8_t     multicast_cmd;
 
-
-    /*  data = 20 
+    /*  data = 20 bytes
         multicast_cmd = data[0];
         multicast_data = data[1..6]
         multicast_node = data [7..19] */
-
     max_data_of_cmd = 6;    
     num_multicast_node = cmd.len;
     if (num_multicast_node > 13) {
         printf("Invalid number of multicast nodes, max = %d....\n", MAX_CMD_DATA_LEN-max_data_of_cmd-1);
-        return 1;
+        return -1;
     }
     multicast_cmd = cmd.arg[0];
     num_timeout=0;
@@ -654,25 +651,26 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
         tx_cmd.type = cmd.type;
         tx_cmd.len = 0xFF;      // multi-cast or broadcast
         tx_cmd.cmd = multicast_cmd;     
+        tx_cmd.err_code = 0;
         for (j=0; j<max_data_of_cmd; j++)
             tx_cmd.arg[j] = cmd.arg[j+1];
 
-        tx_cmd.err_code = 0;
-        executed_node = cmd.arg[i+max_data_of_cmd+1];               //from arg[7] to...
+        executed_node = cmd.arg[i + max_data_of_cmd + 1];               //from arg[7] to...
         if (is_node_valid(executed_node)) {
             node_db_list[executed_node].num_req++;
             res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
             if (res == -1) {
                 printf(" - ERROR: broadcast process \n");
+                err_code = ERR_MULTICAST_CMD;
             }
             else if (res == 0)   {
-                printf(" - Send cmd to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
+                printf(" - Send CMD to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
                 num_timeout++;
                 node_db_list[executed_node].num_timeout++;
-                err_code = ERR_BROADCAST_CMD;
+                err_code = ERR_TIME_OUT;
             }
             else {
-                printf(" - Send cmd to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
+                printf(" - Send CMD to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
                 num_rep++;
                 node_db_list[executed_node].num_rep++;
                 node_db_list[executed_node].last_cmd = tx_cmd.cmd;            
@@ -713,15 +711,16 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
         res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
         if (res == -1) {
             printf(" - ERROR: broadcast process \n");
-        }
-        else if (res == 0)   {
-            printf(" - Send cmd to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
-            num_timeout++;
-            node_db_list[i].num_timeout++;
             err_code = ERR_BROADCAST_CMD;
         }
+        else if (res == 0)   {
+            printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+            num_timeout++;
+            node_db_list[i].num_timeout++;
+            err_code = ERR_TIME_OUT;
+        }
         else {
-            printf(" - Send cmd to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+            printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
             num_rep++;
             node_db_list[i].num_rep++;
             node_db_list[i].last_cmd = tx_cmd.cmd;            
@@ -731,6 +730,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
     rx_reply.arg[0] = num_of_node;
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
+    
     return 0;
 }
 
@@ -802,7 +802,7 @@ int find_node(char *ip_addr) {
 
 //-------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    int res;
+    int res, i;
     int option = 1;
 
     struct sockaddr_in pi_myaddr;	                      /* our address */
@@ -895,7 +895,7 @@ int main(int argc, char* argv[]) {
                 emergency_node = find_node(buffer);
                 if (emergency_reply.err_code = ERR_EMERGENCY) {
                     printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
-                    //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);                
+                    //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                     node_db_list[emergency_node].num_emergency_msg++;
                     memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
                     
