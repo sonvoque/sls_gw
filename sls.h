@@ -151,7 +151,8 @@ enum {
 	ERR_TIME_OUT			= 0x03,
 	ERR_EMERGENCY			= 0x04,
 	ERR_BROADCAST_CMD		= 0x05,	
-	ERR_MULTICAST_CMD		= 0x05,
+	ERR_MULTICAST_CMD		= 0x06,
+	ERR_RF_LOST_POWER		= 0x07,
 };
 
 enum {
@@ -190,7 +191,7 @@ struct led_struct_t {
 };
 
 struct power_metter {
-	uint16_t	id;		/*0010xxxx xxxxxxxx */
+	uint16_t	id;			/*0010xxxx xxxxxxxx */
 	uint16_t  	panid;		
 	uint8_t		status;	
 	/* data of device */

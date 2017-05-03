@@ -96,6 +96,7 @@ static bool is_node_connected(int node);
 static void auto_set_app_key();
 static int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
 static void convert_array2str(unsigned char *bin, unsigned int binsz, char **result);
+static void float2Bytes(float val,uint8_t* bytes_array);
 
 struct timeval t0;
 struct timeval t1;
@@ -261,26 +262,26 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\n");
-    printf("|--------------------------------------------------LOCAL DATABASE-------------------------------------------------------------|\n");
-    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|      last_seen       |chan |RSSI/LQI/power|emger|err_code|\n");
-    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |         time         | nel |(dBm)/  /(dBm)|gency|  (hex) |\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|----------------------|-----|--------------|-----|--------|\n");
+    printf("\nLOCAL DATABASE\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
+    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code|\n");
+    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
+            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);  
         else
-            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %20s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
+            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);
     }
-    printf("|-----------------------------------------------------------------------------------------------------------------------------|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
 }
 
 
@@ -364,7 +365,7 @@ int read_node_list(){
         sql_db_error = true;
     }
     else {
-        printf("Reading DB: sls_db......\n");
+        //printf("Reading DB: sls_db......\n");
     }
 
     num_fields = mysql_num_fields(result);
@@ -513,6 +514,15 @@ void print_cmd(cmd_struct_t command) {
     printf("]\n");
 }  
 
+/*---------------------------------------------------------------------------*/
+void float2Bytes(float val,uint8_t* bytes_array){
+  union {
+    float float_variable;
+    uint8_t temp_array[4];
+  } u;
+  u.float_variable = val;
+  memcpy(bytes_array, u.temp_array, 4);
+}
 
 
 /*------------------------------------------------*/
@@ -894,7 +904,7 @@ int main(int argc, char* argv[]) {
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
                 emergency_node = find_node(buffer);
                 if (emergency_reply.err_code = ERR_EMERGENCY) {
-                    printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                    //printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                     node_db_list[emergency_node].num_emergency_msg++;
                     memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
@@ -1058,7 +1068,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
             node_db_list[nodeid].num_of_retrans = num_of_retrans;
             time(&rawtime );
             timeinfo = localtime ( &rawtime );
-            strftime(str_time,80,"%x-%I:%M:%S %p", timeinfo);
+            strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
             strcpy (node_db_list[nodeid].last_seen, str_time);
             update_sql_row(nodeid);
         }
@@ -1078,7 +1088,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
 
                 time(&rawtime );
                 timeinfo = localtime ( &rawtime );
-                strftime(str_time,80,"%x-%I:%M:%S %p", timeinfo);
+                strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
                 strcpy (node_db_list[nodeid].last_seen, str_time);
 
                 num_of_retrans = retrans;   // exit while loop
