@@ -88,9 +88,9 @@ static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
 static void update_sql_row(int nodeid);
-static int execute_broadcast_cmd(cmd_struct_t cmd, int val);
+static int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
 static int execute_multicast_cmd(cmd_struct_t cmd);
-static int execute_broadcast_general_cmd(cmd_struct_t cmd);
+static int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 static void auto_set_app_key();
@@ -590,7 +590,10 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
-int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
+/* mode = 2: broadcast all
+   mode = 1: odd
+   mode = 0: even */
+int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
     int i, num_timeout, res, num_rep;
     uint16_t err_code;
 
@@ -606,25 +609,76 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val) {
         tx_cmd.arg[0] = val;
         tx_cmd.err_code = 0;
 
-        node_db_list[i].num_req++;
-        res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-        if (res == -1) {
-            printf(" - ERROR: broadcast process \n");
-            err_code = ERR_BROADCAST_CMD;
+        if (mode==2) {
+            node_db_list[i].num_req++;
+            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+            if (res == -1) {
+                printf(" - ERROR: broadcast process \n");
+                err_code = ERR_BROADCAST_CMD;
+            }
+            else if (res == 0)   {
+                printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                num_timeout++;
+                node_db_list[i].num_timeout++;
+                err_code = ERR_TIME_OUT;
+            }
+            else{
+                printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                num_rep++;
+                node_db_list[i].num_rep++;
+                node_db_list[i].last_cmd = tx_cmd.cmd;            
+            }
         }
-        else if (res == 0)   {
-            printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
-            num_timeout++;
-            node_db_list[i].num_timeout++;
-            err_code = ERR_TIME_OUT;
+
+        /* odd led */
+        else if (mode==1) {
+            if ((i % 2)==1) {
+                node_db_list[i].num_req++;
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+                if (res == -1) {
+                    printf(" - ERROR: broadcast process \n");
+                    err_code = ERR_BROADCAST_CMD;
+                }
+                else if (res == 0)   {
+                    printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                    num_timeout++;
+                    node_db_list[i].num_timeout++;
+                    err_code = ERR_TIME_OUT;
+                }
+                else{
+                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    num_rep++;
+                    node_db_list[i].num_rep++;
+                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                }
+            }   
         }
-        else{
-            printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
-            num_rep++;
-            node_db_list[i].num_rep++;
-            node_db_list[i].last_cmd = tx_cmd.cmd;            
-        }
+        /* even */
+        else if (mode==0) {
+            if (((i % 2)==0) && (i!=0)){
+                node_db_list[i].num_req++;
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+                if (res == -1) {
+                    printf(" - ERROR: broadcast process \n");
+                    err_code = ERR_BROADCAST_CMD;
+                }
+                else if (res == 0)   {
+                    printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                    num_timeout++;
+                    node_db_list[i].num_timeout++;
+                    err_code = ERR_TIME_OUT;
+                }
+                else{
+                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    num_rep++;
+                    node_db_list[i].num_rep++;
+                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                }
+            }   
+
+        } 
     }
+
     rx_reply.err_code = err_code;
     rx_reply.arg[0] = num_of_node-1;
     rx_reply.arg[1] = num_rep;
@@ -640,13 +694,13 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     uint16_t    err_code;
     uint8_t     multicast_cmd;
 
-    /*  data = 20 bytes
+    /*  data = 56 bytes
         multicast_cmd = data[0];
-        multicast_data = data[1..6]
-        multicast_node = data [7..19] */
-    max_data_of_cmd = 6;    
+        multicast_data = data[1..10]
+        multicast_node = data [11..55] */
+    max_data_of_cmd = 10;    
     num_multicast_node = cmd.len;
-    if (num_multicast_node > 13) {
+    if (num_multicast_node > (MAX_CMD_DATA_LEN-max_data_of_cmd-1) ) {
         printf("Invalid number of multicast nodes, max = %d....\n", MAX_CMD_DATA_LEN-max_data_of_cmd-1);
         return -1;
     }
@@ -695,7 +749,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
 }
 
 /*------------------------------------------------*/
-int execute_broadcast_general_cmd(cmd_struct_t cmd) {
+int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
     int i,j, num_timeout, res, num_rep;
     uint16_t err_code;
     uint8_t broadcast_cmd;
@@ -717,25 +771,75 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd) {
             tx_cmd.arg[j] = cmd.arg[j+1];
         }
 
-        node_db_list[i].num_req++;
-        res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-        if (res == -1) {
-            printf(" - ERROR: broadcast process \n");
-            err_code = ERR_BROADCAST_CMD;
+        if (mode==2) {
+            node_db_list[i].num_req++;
+            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+            if (res == -1) {
+                printf(" - ERROR: broadcast process \n");
+                err_code = ERR_BROADCAST_CMD;
+            }
+            else if (res == 0)   {
+                printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                num_timeout++;
+                node_db_list[i].num_timeout++;
+                err_code = ERR_TIME_OUT;
+            }
+            else {
+                printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                num_rep++;
+                node_db_list[i].num_rep++;
+                node_db_list[i].last_cmd = tx_cmd.cmd;            
+            }
         }
-        else if (res == 0)   {
-            printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
-            num_timeout++;
-            node_db_list[i].num_timeout++;
-            err_code = ERR_TIME_OUT;
+
+        /* odd */
+        else if (mode==1){
+            if ((i%2)==1) {
+                node_db_list[i].num_req++;
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+                if (res == -1) {
+                    printf(" - ERROR: broadcast process \n");
+                    err_code = ERR_BROADCAST_CMD;
+                }
+                else if (res == 0)   {
+                    printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                    num_timeout++;
+                    node_db_list[i].num_timeout++;
+                    err_code = ERR_TIME_OUT;
+                }
+                else {
+                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    num_rep++;
+                    node_db_list[i].num_rep++;
+                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                }
+            }
         }
-        else {
-            printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
-            num_rep++;
-            node_db_list[i].num_rep++;
-            node_db_list[i].last_cmd = tx_cmd.cmd;            
+        /* even */
+        else if (mode==0){
+            if (((i % 2)==0) && (i!=0)){
+                node_db_list[i].num_req++;
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
+                if (res == -1) {
+                    printf(" - ERROR: broadcast process \n");
+                    err_code = ERR_BROADCAST_CMD;
+                }
+                else if (res == 0)   {
+                    printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
+                    num_timeout++;
+                    node_db_list[i].num_timeout++;
+                    err_code = ERR_TIME_OUT;
+                }
+                else {
+                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    num_rep++;
+                    node_db_list[i].num_rep++;
+                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                }
+            }
         }
     }
+
     rx_reply.err_code = err_code;
     rx_reply.arg[0] = num_of_node;
     rx_reply.arg[1] = num_rep;
@@ -766,19 +870,55 @@ void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 170);
+            execute_broadcast_cmd(cmd, 170, 2);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
+
+        case CMD_GW_TURN_ON_ODD:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, 170, 1);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,170,1);
+            break;
         
+        case CMD_GW_TURN_ON_EVEN:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, 170, 0);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,170,0);
+            break;
+
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 0);
+            execute_broadcast_cmd(cmd, 0, 2);
             //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
+        case CMD_GW_TURN_OFF_ODD:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, 0, 1);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
+            break;
+        
+        case CMD_GW_TURN_OFF_EVEN:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, 0, 0);
+            //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
+            break;
+
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, cmd.arg[0]);
+            execute_broadcast_cmd(cmd, cmd.arg[0],2);
+            //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            break;
+
+        case CMD_GW_DIM_ODD:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, cmd.arg[0],1);
+            //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
+            break;
+
+        case CMD_GW_DIM_EVEN:
+            rx_reply.type = MSG_TYPE_REP;
+            execute_broadcast_cmd(cmd, cmd.arg[0],0);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
@@ -786,9 +926,10 @@ void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
             rx_reply.type = MSG_TYPE_REP;
             execute_multicast_cmd(cmd);
             break;
+
         case CMD_GW_BROADCAST_CMD:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_general_cmd(cmd);
+            execute_broadcast_general_cmd(cmd, 2);
             break;
 
         case CMD_GW_GET_EMER_INFO:

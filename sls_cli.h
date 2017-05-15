@@ -61,10 +61,6 @@ struct node_db_struct_t {
 	uint8_t 	last_emergency_msg[MAX_CMD_DATA_LEN];
 };
 
-union float_byte_convert {
-    float f;
-    uint8_t bytes[4];
-};
 
 typedef struct node_db_struct_t		node_db_struct_t;
 
