@@ -75,28 +75,31 @@ static  int node_id, num_of_node, timeout_val;
 static void print_cmd();
 static void prepare_cmd();
 
-static int read_node_list();
+static int  read_node_list();
 static void run_node_discovery();
-static int ip6_send_cmd (int nodeid, int port, int retrans);
+static int  ip6_send_cmd (int nodeid, int port, int retrans);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd, int nodeid);
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
-static int execute_sql_cmd(char *sql);
+static int  execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
 static void update_sql_db();
 static void update_sql_row(int nodeid);
-static int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
-static int execute_multicast_cmd(cmd_struct_t cmd);
-static int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode);
+static int  execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
+static int  execute_multicast_cmd(cmd_struct_t cmd);
+static int  execute_broadcast_general_cmd(cmd_struct_t cmd, int mode);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 static void auto_set_app_key();
-static int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
+static int  convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
 static void convert_array2str(unsigned char *bin, unsigned int binsz, char **result);
 static void float2Bytes(float val,uint8_t* bytes_array);
+static void run_reload_gw_fw();
+static int num_of_active_node();
+static void reset_reply_data();
 
 struct timeval t0;
 struct timeval t1;
@@ -116,9 +119,9 @@ static char sql_db[20] = "sls_db";
 /*------------------------------------------------*/
 void finish_with_error(MYSQL *con) {
 #ifdef USING_SQL_SERVER    
-  fprintf(stderr, "%s\n", mysql_error(con));
-  mysql_close(con);
-  //exit(1);        
+    fprintf(stderr, "%s\n", mysql_error(con));
+    mysql_close(con);
+    //exit(1);        
 #endif
 }
 
@@ -263,25 +266,27 @@ void update_sql_db() {
 void show_local_db() { 
     int i;
     printf("\nLOCAL DATABASE\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
-    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code|\n");
-    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
+    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next |\n");
+    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
+            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);  
+                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
+                node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);  
         else
-            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X |\n",node_db_list[i].id,
+            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code);
+                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
+                node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);
     }
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
 }
 
 
@@ -487,7 +492,10 @@ void run_node_discovery(){
             node_db_list[i].lqi = rx_reply.arg[3];
             node_db_list[i].tx_power = rx_reply.arg[4];
             node_db_list[i].pan_id = (rx_reply.arg[5] << 8) | (rx_reply.arg[6]);
+            node_db_list[i].next_hop_addr[0] = rx_reply.arg[7];
+            node_db_list[i].next_hop_addr[1] = rx_reply.arg[8];            
             printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
+            printf(" - Next hop addr = 0x%02X%02X\n",node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);
         }
     }
     update_sql_db();    
@@ -585,8 +593,17 @@ bool is_cmd_of_gw(cmd_struct_t cmd) {
             (cmd.cmd==CMD_GW_DIM_ALL) ||            
             (cmd.cmd==CMD_GW_SET_TIMEOUT) ||
             (cmd.cmd==CMD_GW_BROADCAST_CMD) ||            
-            (cmd.cmd==CMD_GW_GET_EMER_INFO) ||            
-            (cmd.cmd==CMD_GW_MULTICAST_CMD);
+            (cmd.cmd==CMD_GW_MULTICAST_CMD) ||
+            (cmd.cmd==CMD_GW_GET_EMER_INFO) ||   
+
+            (cmd.cmd==CMD_GW_TURN_ON_ODD) ||      
+            (cmd.cmd==CMD_GW_TURN_ON_EVEN) ||      
+            (cmd.cmd==CMD_GW_TURN_ON_ODD) ||      
+            (cmd.cmd==CMD_GW_TURN_OFF_ODD) ||      
+            (cmd.cmd==CMD_GW_DIM_ODD) ||        
+            (cmd.cmd==CMD_GW_DIM_EVEN) ||        
+                            
+            (cmd.cmd==CMD_GW_RELOAD_FW);
 }
 
 /*------------------------------------------------*/
@@ -936,7 +953,37 @@ void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
             rx_reply.type = MSG_TYPE_REP;
             memcpy(&rx_reply.arg, &node_db_list[nodeid].last_emergency_msg, MAX_CMD_DATA_LEN);
             break;            
+
+        case CMD_GW_RELOAD_FW:
+            run_reload_gw_fw();
+            rx_reply.type = MSG_TYPE_REP;
+            reset_reply_data();
+            rx_reply.arg[0]= num_of_active_node();
+            break;            
     }
+    //rx_reply.type = MSG_TYPE_REP;
+}
+
+
+/*------------------------------------------------*/
+void reset_reply_data(){
+    int i;
+    for (i=0; i<MAX_CMD_DATA_LEN; i++) {
+        rx_reply.arg[i]=0;
+    }
+}
+
+/*------------------------------------------------*/
+int num_of_active_node(){    
+    int i, num_active_node;
+
+    num_active_node = 0;
+    for (i=1; i<num_of_node; i++) {
+        if ((char)node_db_list[i].connected[0]=='Y') {
+            num_active_node++;
+        }
+    }
+    return num_active_node;
 }
 
 /*------------------------------------------------*/
@@ -949,6 +996,24 @@ int find_node(char *ip_addr) {
         }
     }
     return 0;
+}
+
+static void run_reload_gw_fw(){
+    clear();
+    init_main();
+
+    /* read node list*/
+    read_node_list();
+
+    /* running discovery */
+    run_node_discovery();
+
+#ifdef AUTO_SET_APP_KEY
+    auto_set_app_key();
+#endif
+
+    update_sql_db();
+    show_local_db();    
 }
 
 //-------------------------------------------------------------------------------------------
