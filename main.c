@@ -81,13 +81,20 @@ static int  ip6_send_cmd (int nodeid, int port, int retrans);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd, int nodeid);
+
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
 static int  execute_sql_cmd(char *sql);
 static void show_sql_db();
 static void show_local_db();
+static void update1_sql_db();
+static void update2_sql_db();
 static void update_sql_db();
+
+static void update1_sql_row(int nodeid);
+static void update2_sql_row(int nodeid);
 static void update_sql_row(int nodeid);
+
 static int  execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
 static int  execute_multicast_cmd(cmd_struct_t cmd);
 static int  execute_broadcast_general_cmd(cmd_struct_t cmd, int mode);
@@ -100,6 +107,8 @@ static void float2Bytes(float val,uint8_t* bytes_array);
 static void run_reload_gw_fw();
 static int num_of_active_node();
 static void reset_reply_data();
+static char * add_ipaddr(char *buf, int nodeid);
+
 
 struct timeval t0;
 struct timeval t1;
@@ -192,7 +201,8 @@ void auto_set_app_key() {
 }
 
 
-void update_sql_row(int nodeid) {
+/*------------------------------------------------*/
+void update1_sql_row(int nodeid) {
 #ifdef USING_SQL_SERVER    
     char sql[400];
     int i;
@@ -205,18 +215,20 @@ void update_sql_row(int nodeid) {
     //printf("\nresult : %s\n", result);
 
     if (is_node_connected(nodeid)) {
-        sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+        sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[nodeid].num_req, node_db_list[nodeid].num_rep, node_db_list[nodeid].num_timeout, node_db_list[nodeid].last_cmd, 
                 node_db_list[nodeid].last_seen, node_db_list[nodeid].num_of_retrans, node_db_list[nodeid].channel_id, node_db_list[nodeid].rssi, node_db_list[nodeid].lqi, 
                 node_db_list[nodeid].pan_id, node_db_list[nodeid].tx_power,node_db_list[nodeid].last_err_code, 
-                node_db_list[nodeid].num_emergency_msg, result, nodeid);
+                node_db_list[nodeid].num_emergency_msg, result,
+                nodeid);
     }
     else {
-        sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+        sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[nodeid].num_req, node_db_list[nodeid].num_rep, node_db_list[nodeid].num_timeout, node_db_list[nodeid].last_cmd, 
                 node_db_list[nodeid].last_seen, node_db_list[nodeid].num_of_retrans, node_db_list[nodeid].channel_id, node_db_list[nodeid].rssi, node_db_list[nodeid].lqi, 
                 node_db_list[nodeid].pan_id, node_db_list[nodeid].tx_power,node_db_list[nodeid].last_err_code, 
-                node_db_list[nodeid].num_emergency_msg, result, nodeid);
+                node_db_list[nodeid].num_emergency_msg, result, 
+                nodeid);
     }    
     if (execute_sql_cmd(sql)==0){
         //printf("sql_cmd = %s\n", sql);
@@ -227,7 +239,35 @@ void update_sql_row(int nodeid) {
 }
 
 /*------------------------------------------------*/
-void update_sql_db() {
+void update2_sql_row(int nodeid) {
+#ifdef USING_SQL_SERVER    
+    char sql[400];
+    int i;
+
+    if (is_node_connected(nodeid)) {
+        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr, nodeid);
+    }
+    else {
+        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr, nodeid);
+    }    
+    if (execute_sql_cmd(sql)==0){
+        //printf("sql_cmd = %s\n", sql);
+    }    
+
+    //free(result);    
+#endif    
+}
+
+/*------------------------------------------------*/
+void update_sql_row(int nodeid) {
+    update1_sql_row(nodeid);
+    update2_sql_row(nodeid);
+}
+
+/*------------------------------------------------*/
+void update1_sql_db() {
 #ifdef USING_SQL_SERVER    
     char sql[400];
     int i;
@@ -243,14 +283,14 @@ void update_sql_db() {
 
         if (is_node_connected(i)) {
             //printf("node %d = 'Y' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='Y', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
                 node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
         }
         else {
             //printf("node %d = 'N' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s' WHERE node_id=%d;", 
+            sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
                 node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
@@ -260,6 +300,36 @@ void update_sql_db() {
         }    
     }
 #endif    
+}
+
+/*------------------------------------------------*/
+void update2_sql_db() {
+#ifdef USING_SQL_SERVER    
+    char sql[400];
+    int i;
+
+    for (i=1; i<num_of_node; i++) {
+        if (is_node_connected(i)) {
+            //printf("node %d = 'Y' \n",i);
+            sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
+                node_db_list[i].next_hop_link_addr, i);
+        }
+        else {
+            //printf("node %d = 'N' \n",i);
+            sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s'  WHERE node_id=%d;", 
+                node_db_list[i].next_hop_link_addr, i);
+        }    
+        if (execute_sql_cmd(sql)==0){
+            //printf("sql_cmd = %s\n", sql);
+        }    
+    }
+#endif    
+}
+
+/*------------------------------------------------*/
+void update_sql_db() {
+    update1_sql_db();
+    update2_sql_db();    
 }
 
 /*------------------------------------------------*/
@@ -277,14 +347,14 @@ void show_local_db() {
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
-                node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);  
+                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15]);  
         else
             printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
-                node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);
+                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15]);
     }
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
 }
@@ -458,11 +528,39 @@ int execute_sql_cmd(char *sql) {
 #endif
     return 0;
 }
+
+/*------------------------------------------------*/
+static char * add_ipaddr(char *buf, int nodeid) {
+  uint16_t a;
+  unsigned int i;
+  int f;
+  char *p = buf;
+
+    for(i = 0, f = 0; i < 16; i += 2) {
+        a = (node_db_list[nodeid].next_hop_addr[i] << 8) + node_db_list[nodeid].next_hop_addr[i + 1];
+        if(a == 0 && f >= 0) {
+            if(f++ == 0) {
+                p += sprintf(p, "::");
+            }
+        } else {
+        if(f > 0) {
+            f = -1;
+        } else if(i > 0) {
+            p += sprintf(p, ":");
+        }
+        p += sprintf(p, "%04x", a);
+        }
+    }
+    return p;
+}
+
 /*------------------------------------------------*/
 void run_node_discovery(){
     char sql[200];
-    int res, i;
+    int res, i,j;
     uint16_t rssi_rx;
+    char *p;
+    char buf[100];
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
     for (i = 1; i < num_of_node; i++) {
@@ -492,10 +590,13 @@ void run_node_discovery(){
             node_db_list[i].lqi = rx_reply.arg[3];
             node_db_list[i].tx_power = rx_reply.arg[4];
             node_db_list[i].pan_id = (rx_reply.arg[5] << 8) | (rx_reply.arg[6]);
-            node_db_list[i].next_hop_addr[0] = rx_reply.arg[7];
-            node_db_list[i].next_hop_addr[1] = rx_reply.arg[8];            
-            printf(" - Node %d [%s] available\n", i, node_db_list[i].ipv6_addr);   
-            printf(" - Next hop addr = 0x%02X%02X\n",node_db_list[i].next_hop_addr[0],node_db_list[i].next_hop_addr[1]);
+            for (j=0; j<16; j++) {
+                node_db_list[i].next_hop_addr[j] = rx_reply.arg[7+j];
+            } 
+            add_ipaddr(buf,i);
+            strcpy(node_db_list[i].next_hop_link_addr, buf);
+            printf(" - Node %d [%s] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
+            //printf("Next hop IPv6 link addr = %s \n", buf);
         }
     }
     update_sql_db();    
@@ -998,20 +1099,16 @@ int find_node(char *ip_addr) {
     return 0;
 }
 
+
+/*------------------------------------------------*/
 static void run_reload_gw_fw(){
     clear();
     init_main();
-
-    /* read node list*/
     read_node_list();
-
-    /* running discovery */
     run_node_discovery();
-
 #ifdef AUTO_SET_APP_KEY
     auto_set_app_key();
 #endif
-
     update_sql_db();
     show_local_db();    
 }
@@ -1036,7 +1133,6 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in6 sin6;
     int sin6len;
     int timeout = 0.2;      //200ms
-
 
 
     clear();
@@ -1074,7 +1170,6 @@ int main(int argc, char* argv[]) {
 
     update_sql_db();
     show_local_db();
-
 
 
     // setting UDP/IPv6 socket for emergency msg

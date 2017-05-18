@@ -59,7 +59,8 @@ struct node_db_struct_t {
 	int		    tx_power;
 	int 		num_emergency_msg;
 	uint8_t 	last_emergency_msg[MAX_CMD_DATA_LEN];
-	char		next_hop_addr[2];
+	char		next_hop_addr[16];
+	char		next_hop_link_addr[50];
 };
 
 
