@@ -38,6 +38,7 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
+#define MAX_TIMEOUT     5   // seconds
 #define TIME_OUT    1      //seconds
 #define NUM_RETRANSMISSIONS 1
 
@@ -48,17 +49,17 @@ static  char    str_port[5];
 
 static  int     rev_bytes;
 static  char    rev_buffer[MAXBUF];
-static  char    dst_ipv6addr[50];
+static  char    dst_ipv6addr[40];
 static  char    cmd[20];
 static  char    arg[32];
 
 static node_db_struct_t node_db;
-static node_db_struct_t node_db_list[100]; 
+static node_db_struct_t node_db_list[MAX_NUM_OF_NODE]; 
 
 struct  pollfd fd;
 int     res;
 
-static  char    dst_ipv6addr_list[40][50];
+static  char    dst_ipv6addr_list[MAX_NUM_OF_NODE][40];
 
 static  cmd_struct_t  tx_cmd, rx_reply, emergency_reply;
 static  cmd_struct_t *cmdPtr;
@@ -335,7 +336,7 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\nLOCAL DATABASE\n");
+    printf("\nLOCAL DATABASE: size = %d (bytes) \n", sizeof(node_db_list));
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
     printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next |\n");
     printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |\n");
@@ -727,7 +728,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
         tx_cmd.arg[0] = val;
         tx_cmd.err_code = 0;
 
-        if (mode==2) {
+        if (mode==ALL_NODE) {
             node_db_list[i].num_req++;
             res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
             if (res == -1) {
@@ -749,7 +750,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
         }
 
         /* odd led */
-        else if (mode==1) {
+        else if (mode==ODD_NODE) {
             if ((i % 2)==1) {
                 node_db_list[i].num_req++;
                 res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
@@ -772,7 +773,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
             }   
         }
         /* even */
-        else if (mode==0) {
+        else if (mode==EVEN_NODE) {
             if (((i % 2)==0) && (i!=0)){
                 node_db_list[i].num_req++;
                 res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
@@ -988,55 +989,64 @@ void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
         
         case CMD_GW_TURN_ON_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 170, 2);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, 100, ALL_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
 
         case CMD_GW_TURN_ON_ODD:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 170, 1);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, 100, ODD_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,170,1);
             break;
         
         case CMD_GW_TURN_ON_EVEN:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 170, 0);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, 100, EVEN_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,170,0);
             break;
 
         case CMD_GW_TURN_OFF_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 0, 2);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, 170, ALL_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_TURN_OFF_ODD:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 0, 1);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, 170, ODD_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_EVEN:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, 0, 0);
+            cmd.cmd = CMD_LED_DIM;            
+            execute_broadcast_cmd(cmd, 170, EVEN_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
 
         case CMD_GW_DIM_ALL:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, cmd.arg[0],2);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, cmd.arg[0], ALL_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_DIM_ODD:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, cmd.arg[0],1);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, cmd.arg[0], ODD_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_DIM_EVEN:
             rx_reply.type = MSG_TYPE_REP;
-            execute_broadcast_cmd(cmd, cmd.arg[0],0);
+            cmd.cmd = CMD_LED_DIM;
+            execute_broadcast_cmd(cmd, cmd.arg[0], EVEN_NODE);
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 

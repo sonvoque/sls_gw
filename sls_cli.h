@@ -17,6 +17,12 @@
 #define USING_SQL_SERVER
 #endif
 
+#define MAX_NUM_OF_NODE			100
+#define ALL_NODE				2
+#define ODD_NODE				1
+#define EVEN_NODE				0
+
+
 
 #define SLS_LED_HELLO			"led_hello"
 #define SLS_LED_ON				"led_on"
@@ -42,7 +48,7 @@
 struct node_db_struct_t {
 	int 		index;
 	int			id;			/*0001xxxx xxxxxxxx */
-	char    	ipv6_addr[50];						
+	char    	ipv6_addr[40];						
 	char		connected[1];
 	int			num_req;
 	int			num_rep;
@@ -50,7 +56,7 @@ struct node_db_struct_t {
 	int			last_cmd;
 	int 		last_err_code;
 	int 		num_of_retrans;
-	char		last_seen[50];
+	char		last_seen[20];
 	char		app_key[32];
 	int 		channel_id;
 	int 		rssi;
@@ -59,8 +65,8 @@ struct node_db_struct_t {
 	int		    tx_power;
 	int 		num_emergency_msg;
 	uint8_t 	last_emergency_msg[MAX_CMD_DATA_LEN];
-	char		next_hop_addr[16];
-	char		next_hop_link_addr[50];
+	char		next_hop_addr[16];			//byte array
+	char		next_hop_link_addr[40];		// link address string
 };
 
 
