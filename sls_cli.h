@@ -67,6 +67,8 @@ struct node_db_struct_t {
 	uint8_t 	last_emergency_msg[MAX_CMD_DATA_LEN];
 	char		next_hop_addr[16];			//byte array
 	char		next_hop_link_addr[40];		// link address string
+	double		delay;
+	double		rdr;	//request delivery rate
 };
 
 

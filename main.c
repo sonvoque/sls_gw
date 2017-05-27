@@ -38,8 +38,8 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define MAX_TIMEOUT     5   // seconds
-#define TIME_OUT    1      //seconds
+#define MAX_TIMEOUT     5   // seconds for a long chain topology 60 nodes
+#define TIME_OUT    4      //seconds
 #define NUM_RETRANSMISSIONS 1
 
 
@@ -109,7 +109,7 @@ static void run_reload_gw_fw();
 static int num_of_active_node();
 static void reset_reply_data();
 static char * add_ipaddr(char *buf, int nodeid);
-
+static float timedifference_msec(struct timeval t0, struct timeval t1);
 
 struct timeval t0;
 struct timeval t1;
@@ -188,14 +188,19 @@ void auto_set_app_key() {
                 tx_cmd.arg[j] = byte_array[j];
             }
 
+            gettimeofday(&t0, 0);
             res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
+            gettimeofday(&t1, 0);
+            elapsed = timedifference_msec(t0, t1);
+            node_db_list[node_id].delay = elapsed;
+
             if (res == -1)
                 printf(" - ERROR: discovery process \n");
             else if (res == 0)
                 printf(" - Set App Key for node %d [%s] failed \n", i, node_db_list[i].ipv6_addr);   
             /*
             else
-                printf(" - Set App Key for node %d [%s] succesful \n", i, node_db_list[i].ipv6_addr);   
+                printf(" - Set App Key for node %d [%s] successful \n", i, node_db_list[i].ipv6_addr);   
             */
         }    
     }
@@ -246,12 +251,14 @@ void update2_sql_row(int nodeid) {
     int i;
 
     if (is_node_connected(nodeid)) {
-        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
-                node_db_list[nodeid].next_hop_link_addr, nodeid);
+        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr, node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
+                nodeid);
     }
     else {
-        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
-                node_db_list[nodeid].next_hop_link_addr, nodeid);
+        sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr,node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
+                nodeid);
     }    
     if (execute_sql_cmd(sql)==0){
         //printf("sql_cmd = %s\n", sql);
@@ -312,13 +319,13 @@ void update2_sql_db() {
     for (i=1; i<num_of_node; i++) {
         if (is_node_connected(i)) {
             //printf("node %d = 'Y' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s'  WHERE node_id=%d;", 
-                node_db_list[i].next_hop_link_addr, i);
+            sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s', delay=%f, rdr=%f  WHERE node_id=%d;", 
+                node_db_list[i].next_hop_link_addr,node_db_list[i].delay, node_db_list[i].rdr, i);
         }
         else {
             //printf("node %d = 'N' \n",i);
-            sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s'  WHERE node_id=%d;", 
-                node_db_list[i].next_hop_link_addr, i);
+            sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s', delay=%f, rdr=%f  WHERE node_id=%d;", 
+                node_db_list[i].next_hop_link_addr,node_db_list[i].delay, node_db_list[i].rdr, i);
         }    
         if (execute_sql_cmd(sql)==0){
             //printf("sql_cmd = %s\n", sql);
@@ -337,27 +344,27 @@ void update_sql_db() {
 void show_local_db() { 
     int i;
     printf("\nLOCAL DATABASE: size = %d (bytes) \n", sizeof(node_db_list));
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
-    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next |\n");
-    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
+    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
+    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|\n",node_db_list[i].id,
+            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
-                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15]);  
+                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
         else
-            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|\n",node_db_list[i].id,
+            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
-                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15]);
+                node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr);
     }
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
 }
 
 
@@ -461,7 +468,7 @@ int read_node_list(){
 #endif    
 
     if (sql_db_error==false) {
-        printf("SQL-DB succesfully reading node infor from SQL DB....\n");    
+        printf("SQL-DB successfully reading node infor from SQL DB....\n");    
     }
     else {
         printf("SQL-DB error: reading node infor from config file....\n");    
@@ -568,7 +575,14 @@ void run_node_discovery(){
         tx_cmd.type = MSG_TYPE_HELLO;
         tx_cmd.cmd = CMD_RF_HELLO;
         tx_cmd.err_code = 0;
+
+        gettimeofday(&t0, 0);
         res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
+        gettimeofday(&t1, 0);
+        elapsed = timedifference_msec(t0, t1);
+        node_db_list[i].delay = elapsed;
+        printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[i].delay);
+
         if (res == -1) {
             printf(" - ERROR: discovery process \n");
         }
@@ -680,7 +694,7 @@ int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_a
 
 
 /*------------------------------------------------*/
-float timedifference_msec(struct timeval t0, struct timeval t1){
+static float timedifference_msec(struct timeval t0, struct timeval t1){
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
@@ -718,7 +732,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
 
     num_timeout=0;
     num_rep=0;
-    printf("Executing broadcast CMD: 0x%02X, arg = %d ...\n", cmd.cmd, val);
+    printf("Executing broadcast commmand: subcmd = 0x%02X, arg = %d ...\n", cmd.cmd, val);
 
     err_code = ERR_NORMAL;
     for (i = 1; i < num_of_node; i++) {
@@ -742,10 +756,11 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
                 err_code = ERR_TIME_OUT;
             }
             else{
-                printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                 num_rep++;
                 node_db_list[i].num_rep++;
                 node_db_list[i].last_cmd = tx_cmd.cmd;            
+                node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;                        
             }
         }
 
@@ -765,10 +780,11 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
                     err_code = ERR_TIME_OUT;
                 }
                 else{
-                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
                     node_db_list[i].last_cmd = tx_cmd.cmd;            
+                    node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;                        
                 }
             }   
         }
@@ -788,10 +804,11 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
                     err_code = ERR_TIME_OUT;
                 }
                 else{
-                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
-                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                    node_db_list[i].last_cmd = tx_cmd.cmd;        
+                    node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;                        
                 }
             }   
 
@@ -826,7 +843,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     multicast_cmd = cmd.arg[0];
     num_timeout=0;
     num_rep=0;
-    printf("Executing multicast command: 0x%02X...\n", multicast_cmd);
+    printf("Executing multicast command: subcmd = 0x%02X...\n", multicast_cmd);
 
     err_code = ERR_NORMAL;
     for (i = 0; i < num_multicast_node; i++) {
@@ -853,10 +870,11 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
                 err_code = ERR_TIME_OUT;
             }
             else {
-                printf(" - Send CMD to node %d [%s] succesful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
+                printf(" - Send CMD to node %d [%s] successful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
                 num_rep++;
                 node_db_list[executed_node].num_rep++;
-                node_db_list[executed_node].last_cmd = tx_cmd.cmd;            
+                node_db_list[executed_node].last_cmd = tx_cmd.cmd;        
+                node_db_list[executed_node].rdr = 100*node_db_list[executed_node].num_rep/node_db_list[executed_node].num_req;
             }
         }
     }
@@ -877,7 +895,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
     num_rep=0;
     broadcast_cmd = cmd.arg[0];
     err_code = ERR_NORMAL;    
-    printf("Executing broadcast general command: 0x%02X ...\n", broadcast_cmd);
+    printf("Executing broadcast general command: subcmd = 0x%02X ...\n", broadcast_cmd);
 
     for (i = 1; i < num_of_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
@@ -904,10 +922,11 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
                 err_code = ERR_TIME_OUT;
             }
             else {
-                printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                 num_rep++;
                 node_db_list[i].num_rep++;
                 node_db_list[i].last_cmd = tx_cmd.cmd;            
+                node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;
             }
         }
 
@@ -927,10 +946,11 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
                     err_code = ERR_TIME_OUT;
                 }
                 else {
-                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
-                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                    node_db_list[i].last_cmd = tx_cmd.cmd;   
+                    node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;                             
                 }
             }
         }
@@ -950,10 +970,11 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
                     err_code = ERR_TIME_OUT;
                 }
                 else {
-                    printf(" - Send CMD to node %d [%s] succesful\n", i, node_db_list[i].ipv6_addr);   
+                    printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
-                    node_db_list[i].last_cmd = tx_cmd.cmd;            
+                    node_db_list[i].last_cmd = tx_cmd.cmd;      
+                    node_db_list[i].rdr = 100*node_db_list[i].num_rep/node_db_list[i].num_req;                          
                 }
             }
         }
@@ -1171,6 +1192,8 @@ int main(int argc, char* argv[]) {
     /* read node list*/
     read_node_list();
 
+
+    /* should wait approximately 5-7s here for a 60-node chain topology */
     /* running discovery */
     run_node_discovery();
 
@@ -1238,7 +1261,7 @@ int main(int argc, char* argv[]) {
         fd.events = POLLIN;
         res = poll(&fd, 1, timeout*1000);   
         if (res>0) {
-            connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //TCP
+            connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //for TCP
             if (connfd >= 0)
                 printf("Accept TCP connection....\n");
         }
@@ -1263,6 +1286,7 @@ int main(int argc, char* argv[]) {
                 if (is_cmd_of_gw(*pi_cmdPtr)==true) {
                     printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
                     process_gw_cmd(*pi_cmdPtr, node_id);
+                    update_sql_db();
                 }
                 else {  // not command for GW: send to node and wait for a reply
                     printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
@@ -1271,8 +1295,10 @@ int main(int argc, char* argv[]) {
                     res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
                     gettimeofday(&t1, 0);
                     elapsed = timedifference_msec(t0, t1);
+                    node_db_list[node_id].delay = elapsed;
                     printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
             
+
                     //update local DB
                     node_db_list[node_id].num_req++;
                     if (res == -1) {
@@ -1288,16 +1314,18 @@ int main(int argc, char* argv[]) {
                         //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
                         node_db_list[node_id].num_rep++;
                         node_db_list[node_id].last_cmd = tx_cmd.cmd;
-                    }            
+                        node_db_list[node_id].rdr = 100*node_db_list[node_id].num_rep/node_db_list[node_id].num_req;
+                    }         
+                    update_sql_row(node_id);
                 }
                 // send REPLY to sender NODE
                 sprintf(pi_buf, "ACK %d", pi_msgcnt++);
                 printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
                 write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
-                show_local_db();
-                update_sql_row(node_id);
                 //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
                 //    perror("sendto");
+
+                show_local_db();
                 printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
             }
         }
