@@ -816,7 +816,8 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
     }
 
     rx_reply.err_code = err_code;
-    rx_reply.arg[0] = num_of_node-1;
+    memset(&rx_reply.arg,0,MAX_CMD_DATA_LEN);   //reset data of reply
+    rx_reply.arg[0] = num_of_node-1; //except node 0
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
 
@@ -879,7 +880,8 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
         }
     }
     rx_reply.err_code = err_code;
-    rx_reply.arg[0] = num_multicast_node;
+    memset(&rx_reply.arg,0,MAX_CMD_DATA_LEN);   //reset data of reply
+    rx_reply.arg[0] = num_of_node-1; //except node 0
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
     return 0;
@@ -981,10 +983,11 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
     }
 
     rx_reply.err_code = err_code;
-    rx_reply.arg[0] = num_of_node;
+    memset(&rx_reply.arg,0,MAX_CMD_DATA_LEN);   //reset data of reply
+    rx_reply.arg[0] = num_of_node-1; //except node 0
     rx_reply.arg[1] = num_rep;
     rx_reply.arg[2] = num_timeout;
-    
+
     return 0;
 }
 
