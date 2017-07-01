@@ -44,21 +44,22 @@
 #define SLS_GET_APP_KEY			"get_app_key"
 #define SLS_APP_KEY_128 		"CAFEBEAFDEADFEEE0123456789ABCDEF"
 
+typedef enum {false=0, true=1} bool;
 
 struct node_db_struct_t {
-	int 		index;
-	int			id;			/*0001xxxx xxxxxxxx */
+	uint8_t 	index;
+	uint16_t	id;			/*0001xxxx xxxxxxxx */
 	char    	ipv6_addr[40];						
 	char		connected[1];
 	int			num_req;
 	int			num_rep;
 	int 		num_timeout;
-	int			last_cmd;
-	int 		last_err_code;
+	uint8_t		last_cmd;
+	uint16_t	last_err_code;
 	int 		num_of_retrans;
 	char		last_seen[20];
 	char		app_key[32];
-	int 		channel_id;
+	uint8_t		channel_id;
 	int 		rssi;
 	int 		lqi;
 	int 		pan_id;
@@ -69,6 +70,9 @@ struct node_db_struct_t {
 	char		next_hop_link_addr[40];		// link address string
 	double		delay;
 	double		rdr;	//request delivery rate
+	uint16_t	challenge_code;
+	uint16_t	challenge_code_res;
+	uint8_t		authenticated;
 };
 
 

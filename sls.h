@@ -29,28 +29,40 @@ enum {
 
 
 /*
-SLS_CC2538DK_HW = 1 : for compiling to CC2538dk
-SLS_CC2538DK_HW = 0 : for compiling to SKY used in Cooja simulation
-SLS_CC2538DK_HW = 2 : for compiling to CC2530DK  */
-#define SLS_CC2538DK_HW		0
+SLS_USING_HW = 0 : for compiling to SKY used in Cooja simulation
+SLS_USING_HW = 1 : for compiling to CC2538dk: 2.4Ghz
+SLS_USING_HW = 2 : for compiling to CC2530DK: 2.4Ghz  
+SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub 1-Ghz  */
+#define SLS_USING_HW		1
 
-#if (SLS_CC2538DK_HW==0)
+#if (SLS_USING_HW==0)
 #define SLS_USING_SKY
 #endif
-#if (SLS_CC2538DK_HW==1)
+#if (SLS_USING_HW==1)
 #define SLS_USING_CC2538DK
 #endif
-#if (SLS_CC2538DK_HW==2)
+#if (SLS_USING_HW==2)
 #define SLS_USING_CC2530DK
+#endif
+#if (SLS_USING_HW==3)
+#define SLS_USING_CC13xx
+#endif
+
+//redefine leds
+#ifdef SLS_USING_CC2538DK
+#define RED			LEDS_ORANGE
+#define GREEN		LEDS_BLUE
+#define BLUE		LEDS_GREEN
+#endif
+
+#ifdef SLS_USING_SKY
+#define RED			LEDS_RED
+#define BLUE		LEDS_BLUE
+#define GREEN		LEDS_GREEN
 #endif
 
 
 #define	SFD 	0x7F		/* Start of SLS frame Delimitter */
-
-//redefine leds
-#define BLUE		LEDS_ORANGE
-#define RED			LEDS_GREEN
-#define GREEN		LEDS_BLUE
 
 #define GW_ID_MASK		0x0000
 #define LED_ID_MASK		0x1000
@@ -61,19 +73,25 @@ SLS_CC2538DK_HW = 2 : for compiling to CC2530DK  */
 #define MAX_CMD_DATA_LEN	56	
 #define MAX_CMD_LEN	sizeof(cmd_struct_t)
 
-typedef enum {false=0, true=1} bool;
+enum {FALSE=0, TRUE=1,};
 
-#define DEFAULT_EMERGENCY_STATUS true
-#define EMERGENCY_TIME  30
+#define DEFAULT_EMERGENCY_STATUS TRUE
+#define EMERGENCY_TIME  30 		//seconds
+
 
 enum {	
 	// msg type
 	MSG_TYPE_REQ			= 0x01,
 	MSG_TYPE_REP			= 0x02,
 	MSG_TYPE_HELLO			= 0x03,
-	MSG_TYPE_EMERGENCY		= 0x04,
+	MSG_TYPE_ASYNC			= 0x04,
 };
 
+enum {	
+	// msg type
+	ASYNC_MSG_JOINED		= 0x01,
+	ASYNC_MSG_LED_DRIVER	= 0x02,
+};
 
 enum {
 	//command id
@@ -112,6 +130,7 @@ enum {
 	CMD_GW_DIM_EVEN			= 0xE4,
 
 	CMD_GW_RELOAD_FW		= 0xE3,
+	CMD_RF_AUTHENTICATE		= 0xE2,
 
 
 	/* for LED-driver */
@@ -133,6 +152,7 @@ enum {
 	STATUS_LED_DIM			= 0x03,	
 	STATUS_LED_ERROR		= 0x04,
 };
+
 
 
 enum {	
@@ -240,8 +260,13 @@ struct net_struct_t {
 	int8_t			tx_power;
 	uint16_t		panid;
 	uint16_t		node_addr;
+	uint8_t			connected;
+	uint8_t			lost_connection_cnt;
 	unsigned char	app_code[16];
 	unsigned char	next_hop[16];
+	uint16_t		challenge_code;
+	uint16_t		challenge_code_res;
+	uint8_t			autheticated;
 };
 
 /*---------------------------------------------------------------------------*/

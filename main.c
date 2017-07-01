@@ -78,6 +78,7 @@ static void prepare_cmd();
 
 static int  read_node_list();
 static void run_node_discovery();
+static bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_res, int *res);
 static int  ip6_send_cmd (int nodeid, int port, int retrans);
 static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
@@ -102,6 +103,7 @@ static int  execute_broadcast_general_cmd(cmd_struct_t cmd, int mode);
 static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 static void auto_set_app_key();
+static void set_node_app_key (int node_id);
 static int  convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
 static void convert_array2str(unsigned char *bin, unsigned int binsz, char **result);
 static void float2Bytes(float val,uint8_t* bytes_array);
@@ -110,6 +112,7 @@ static int num_of_active_node();
 static void reset_reply_data();
 static char * add_ipaddr(char *buf, int nodeid);
 static float timedifference_msec(struct timeval t0, struct timeval t1);
+static uint16_t hash( uint16_t a);
 
 struct timeval t0;
 struct timeval t1;
@@ -142,6 +145,7 @@ void init_main() {
 
     timeout_val = TIME_OUT;
     strcpy(node_db_list[0].connected,"Y");
+    node_db_list[0].authenticated = TRUE;
     ///update_sql_db();
     //show_sql_db();
 }
@@ -171,37 +175,46 @@ void get_db_row(MYSQL_ROW row, int i) {
 #endif
 }
 
+
+/*------------------------------------------------*/
+void set_node_app_key (int node_id) {
+    int res, j;
+    unsigned char byte_array[16];
+
+    tx_cmd.cmd = CMD_SET_APP_KEY;    
+    tx_cmd.type = MSG_TYPE_HELLO;
+    tx_cmd.err_code = 0;
+    convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
+    //printf("Node %d key = %s \n", i, node_db_list[i].app_key );
+    for (j = 0; j<16; j++) {
+        tx_cmd.arg[j] = byte_array[j];
+    }
+
+    gettimeofday(&t0, 0);
+    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, 1);
+    gettimeofday(&t1, 0);
+    elapsed = timedifference_msec(t0, t1);
+    node_db_list[node_id].delay = elapsed;
+
+    if (res == -1) {
+        printf(" - ERROR: set_node_app_key process \n");
+    }
+    else if (res == 0) {
+        printf(" - Set App Key for node %d [%s] failed \n", node_id, node_db_list[node_id].ipv6_addr); 
+    }  
+    else { 
+        printf(" - Set App Key for node %d [%s] successful \n", node_id, node_db_list[node_id].ipv6_addr);   
+    }
+}
+
 /*------------------------------------------------*/
 void auto_set_app_key() {
     int res, i, j;
-    unsigned char byte_array[16];
 
     printf("\n\n Auto set app key process.....\n");
     for (i = 1; i < num_of_node; i++) {
         if (is_node_connected(i)) {
-            tx_cmd.cmd = CMD_SET_APP_KEY;    
-            tx_cmd.type = MSG_TYPE_HELLO;
-            tx_cmd.err_code = 0;
-            convert_str2array(node_db_list[i].app_key, byte_array, 16);
-            //printf("Node %d key = %s \n", i, node_db_list[i].app_key );
-            for (j = 0; j<16; j++) {
-                tx_cmd.arg[j] = byte_array[j];
-            }
-
-            gettimeofday(&t0, 0);
-            res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
-            gettimeofday(&t1, 0);
-            elapsed = timedifference_msec(t0, t1);
-            node_db_list[node_id].delay = elapsed;
-
-            if (res == -1)
-                printf(" - ERROR: discovery process \n");
-            else if (res == 0)
-                printf(" - Set App Key for node %d [%s] failed \n", i, node_db_list[i].ipv6_addr);   
-            /*
-            else
-                printf(" - Set App Key for node %d [%s] successful \n", i, node_db_list[i].ipv6_addr);   
-            */
+            set_node_app_key(i);
         }    
     }
 }
@@ -345,20 +358,20 @@ void show_local_db() {
     int i;
     printf("\nLOCAL DATABASE: size = %d (bytes) \n", sizeof(node_db_list));
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
-    printf("|node|       ipv6 address       |con.| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
-    printf("| id |  (prefix: aaaa::0/64)    |nect| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
+    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
+    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) 
-            printf("| %2d | %24s | %2s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
-                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
+            printf("| %2d | %24s |%2s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
                 node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
         else
-            printf("| %2d | %24s | *%1s |%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
-                node_db_list[i].ipv6_addr, node_db_list[i].connected, node_db_list[i].num_req, 
+            printf("| %2d | %24s |*%1s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
+                node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
@@ -562,6 +575,60 @@ static char * add_ipaddr(char *buf, int nodeid) {
     return p;
 }
 
+
+/*------------------------------------------------*/
+uint16_t hash(uint16_t a) {
+    uint32_t tem;
+    tem =a;
+    tem = (a+0x7ed55d16) + (tem<<12);
+    tem = (a^0xc761c23c) ^ (tem>>19);
+    tem = (a+0x165667b1) + (tem<<5);
+    tem = (a+0xd3a2646c) ^ (tem<<9);
+    tem = (a+0xfd7046c5) + (tem<<3);
+    tem = (a^0xb55a4f09) ^ (tem>>16);
+   return tem & 0xFFFF;
+}
+
+
+/*------------------------------------------------*/
+bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_res, int *res) {
+    bool result;
+    int response;
+    uint32_t rx_res, code;
+
+    result = false;
+    code = challenge_code;
+    tx_cmd.type = MSG_TYPE_HELLO;
+    tx_cmd.cmd = CMD_RF_AUTHENTICATE;
+    tx_cmd.err_code = 0;
+    tx_cmd.arg[0]= (code >> 8) & 0xFF;
+    tx_cmd.arg[1]= code  & 0xFF;
+
+    response = ip6_send_cmd(node_id, SLS_NORMAL_PORT, 1);
+    if (response == -1) {
+        printf(" - ERROR: authetication node %d \n", node_id);
+    }
+    else if (response == 0)   {
+    }
+    else {
+        rx_res = (rx_reply.arg[0] <<8) | (rx_reply.arg[1]);
+        printf(" - Receiving challenge response = 0x%04X \n", rx_res);
+        result = (rx_res==challenge_res);
+    }
+
+    update_sql_row(node_id);    
+    *res = response;
+    return result;
+}
+
+
+uint16_t generate_random_num() {
+    uint16_t random1, random2;
+    random1 = rand();
+    random2 = rand();    
+    return (random1<<8) | (random2);   
+}
+
 /*------------------------------------------------*/
 void run_node_discovery(){
     char sql[200];
@@ -569,15 +636,19 @@ void run_node_discovery(){
     uint16_t rssi_rx;
     char *p;
     char buf[100];
+    bool node_authenticated = false;
+    uint32_t rx_res;
+
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
-    for (i = 1; i < num_of_node; i++) {
-        tx_cmd.type = MSG_TYPE_HELLO;
-        tx_cmd.cmd = CMD_RF_HELLO;
-        tx_cmd.err_code = 0;
+    for (i = 10; i < num_of_node; i++) {
+        node_db_list[i].challenge_code = generate_random_num();
+        node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
+        printf("\n1. Send challenge_code = 0x%04X to node = %d\n",node_db_list[i].challenge_code, i );
+        printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[i].challenge_code_res);
 
         gettimeofday(&t0, 0);
-        res = ip6_send_cmd(i, SLS_NORMAL_PORT, 1);
+        node_authenticated = authenticate_node(i, node_db_list[i].challenge_code, node_db_list[i].challenge_code_res, &res);
         gettimeofday(&t1, 0);
         elapsed = timedifference_msec(t0, t1);
         node_db_list[i].delay = elapsed;
@@ -597,21 +668,25 @@ void run_node_discovery(){
             sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;", i);
             if (execute_sql_cmd(sql)==0) {
             }
-            // rx_reply
-            node_db_list[i].channel_id = rx_reply.arg[0];
-            rssi_rx = rx_reply.arg[1];
-            rssi_rx = (rssi_rx << 8) | rx_reply.arg[2];
-            node_db_list[i].rssi = rssi_rx-200;
-            node_db_list[i].lqi = rx_reply.arg[3];
-            node_db_list[i].tx_power = rx_reply.arg[4];
-            node_db_list[i].pan_id = (rx_reply.arg[5] << 8) | (rx_reply.arg[6]);
-            for (j=0; j<16; j++) {
-                node_db_list[i].next_hop_addr[j] = rx_reply.arg[7+j];
-            } 
-            add_ipaddr(buf,i);
-            strcpy(node_db_list[i].next_hop_link_addr, buf);
-            printf(" - Node %d [%s] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
-            //printf("Next hop IPv6 link addr = %s \n", buf);
+            if (node_authenticated) {
+                printf(" - Node %d authenticated \n", i);
+                node_db_list[i].authenticated = TRUE;
+                // rx_reply
+                node_db_list[i].channel_id = rx_reply.arg[4];
+                rssi_rx = rx_reply.arg[5];
+                rssi_rx = (rssi_rx << 8) | rx_reply.arg[6];
+                node_db_list[i].rssi = rssi_rx-200;
+                node_db_list[i].lqi = rx_reply.arg[7];
+                node_db_list[i].tx_power = rx_reply.arg[8];
+                node_db_list[i].pan_id = (rx_reply.arg[9] << 8) | (rx_reply.arg[10]);
+                for (j=0; j<16; j++) {
+                    node_db_list[i].next_hop_addr[j] = rx_reply.arg[11+j];
+                } 
+                add_ipaddr(buf,i);
+                strcpy(node_db_list[i].next_hop_link_addr, buf);
+                printf(" - Node %d [%s] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
+                //printf("Next hop IPv6 link addr = %s \n", buf);
+            }
         }
     }
     update_sql_db();    
@@ -879,6 +954,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
             }
         }
     }
+
     rx_reply.err_code = err_code;
     memset(&rx_reply.arg,0,MAX_CMD_DATA_LEN);   //reset data of reply
     rx_reply.arg[0] = num_of_node-1; //except node 0
@@ -1012,81 +1088,81 @@ void process_gw_cmd(cmd_struct_t cmd, int nodeid) {
             break;
         
         case CMD_GW_TURN_ON_ALL:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, 100, ALL_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
 
         case CMD_GW_TURN_ON_ODD:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, 100, ODD_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_ON,170,1);
             break;
         
         case CMD_GW_TURN_ON_EVEN:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, 100, EVEN_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_ON,170,0);
             break;
 
         case CMD_GW_TURN_OFF_ALL:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, 170, ALL_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_OFF, 0);
             break;
         
         case CMD_GW_TURN_OFF_ODD:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, 170, ODD_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
         
         case CMD_GW_TURN_OFF_EVEN:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;            
             execute_broadcast_cmd(cmd, 170, EVEN_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_ON,0);
             break;
 
         case CMD_GW_DIM_ALL:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, cmd.arg[0], ALL_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_DIM_ODD:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, cmd.arg[0], ODD_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_DIM_EVEN:
-            rx_reply.type = MSG_TYPE_REP;
             cmd.cmd = CMD_LED_DIM;
             execute_broadcast_cmd(cmd, cmd.arg[0], EVEN_NODE);
+            rx_reply.type = MSG_TYPE_REP;
             //execute_broadcasd_cmd(CMD_RF_LED_DIM, cmd.arg[0]);
             break;
 
         case CMD_GW_MULTICAST_CMD:
-            rx_reply.type = MSG_TYPE_REP;
             execute_multicast_cmd(cmd);
+            rx_reply.type = MSG_TYPE_REP;
             break;
 
         case CMD_GW_BROADCAST_CMD:
-            rx_reply.type = MSG_TYPE_REP;
             execute_broadcast_general_cmd(cmd, 2);
+            rx_reply.type = MSG_TYPE_REP;
             break;
 
         case CMD_GW_GET_EMER_INFO:
-            rx_reply.type = MSG_TYPE_REP;
             memcpy(&rx_reply.arg, &node_db_list[nodeid].last_emergency_msg, MAX_CMD_DATA_LEN);
+            rx_reply.type = MSG_TYPE_REP;
             break;            
 
         case CMD_GW_RELOAD_FW:
@@ -1143,13 +1219,14 @@ static void run_reload_gw_fw(){
 #ifdef AUTO_SET_APP_KEY
     auto_set_app_key();
 #endif
+    //run_node_authentication();
     update_sql_db();
     show_local_db();    
 }
 
 //-------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    int res, i;
+    int res, i, j;
     int option = 1;
 
     struct sockaddr_in pi_myaddr;	                      /* our address */
@@ -1167,6 +1244,14 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in6 sin6;
     int sin6len;
     int timeout = 0.2;      //200ms
+
+    char str_time[80];
+
+    uint16_t rssi_rx;
+    char buf[100];
+    bool node_authenticated = false;
+    uint32_t rx_res;
+
 
 
     clear();
@@ -1225,7 +1310,7 @@ int main(int argc, char* argv[]) {
 
     // main loop
     printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
-    printf("\nIV. GATEWAY WAITING on PORT %d for EMERGENCY MSG\n", SLS_EMERGENCY_PORT);
+    printf("\nIV. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
     for (;;) {    
         // waiting for EMERGENCY msg
         //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
@@ -1240,19 +1325,70 @@ int main(int argc, char* argv[]) {
                 emergency_reply = *cmdPtr;
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
                 emergency_node = find_node(buffer);
-                if (emergency_reply.err_code = ERR_EMERGENCY) {
-                    //printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                if (emergency_reply.err_code == ERR_EMERGENCY) {
+                    printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                     node_db_list[emergency_node].num_emergency_msg++;
                     memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
                     
+                    time(&rawtime );
+                    timeinfo = localtime(&rawtime );
+                    strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
+                    strcpy (node_db_list[emergency_node].last_seen, str_time);
+                    strcpy(node_db_list[emergency_node].connected,"Y");
+
+                    //show_local_db();
+
+                    //send authentication here
+                    if (node_db_list[emergency_node].authenticated==FALSE) {
+                        printf("- Node %d not authenticated \n",emergency_node);
+                        node_db_list[emergency_node].challenge_code = generate_random_num();
+                        node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
+                        printf("\n1. Send challenge_code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
+                        printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[emergency_node].challenge_code_res);
+
+                        gettimeofday(&t0, 0);
+                        node_authenticated = authenticate_node(emergency_node, node_db_list[emergency_node].challenge_code, node_db_list[emergency_node].challenge_code_res, &res);
+                        gettimeofday(&t1, 0);
+                        elapsed = timedifference_msec(t0, t1);
+                        node_db_list[emergency_node].delay = elapsed;
+                        printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[emergency_node].delay);
+
+                        if (res == -1) {
+                            printf(" - ERROR: authetication process \n");
+                        }
+                        else if (res == 0)   {
+                            printf(" - Node %d [%s] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
+                        }
+                        else{
+                            if (node_authenticated==TRUE) {
+                                printf(" - Node %d authenticated \n", emergency_node);
+                                node_db_list[emergency_node].authenticated = TRUE;
+                                // rx_reply
+                                node_db_list[emergency_node].channel_id = rx_reply.arg[4];
+                                rssi_rx = rx_reply.arg[5];
+                                rssi_rx = (rssi_rx << 8) | rx_reply.arg[6];
+                                node_db_list[emergency_node].rssi = rssi_rx-200;
+                                node_db_list[emergency_node].lqi = rx_reply.arg[7];
+                                node_db_list[emergency_node].tx_power = rx_reply.arg[8];
+                                node_db_list[emergency_node].pan_id = (rx_reply.arg[9] << 8) | (rx_reply.arg[10]);
+                                for (j=0; j<16; j++) {
+                                    node_db_list[emergency_node].next_hop_addr[j] = rx_reply.arg[11+j];
+                                } 
+                                add_ipaddr(buf,emergency_node);
+                                strcpy(node_db_list[emergency_node].next_hop_link_addr, buf);
+                                printf(" - Node %d [%s] available, next-hop link addr = %s\n", emergency_node, node_db_list[emergency_node].ipv6_addr, node_db_list[emergency_node].next_hop_link_addr);
+                                set_node_app_key(emergency_node);
+                            }
+                        }
+                    }
                     update_sql_row(emergency_node);
                     show_local_db();
                 }
             }
         }
         //close(emergency_sock);
-        //sleep(1);        
+        sleep(1);        
 
 
         // waiting for command from software
