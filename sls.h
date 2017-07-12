@@ -61,6 +61,14 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub 1-Ghz  */
 #define GREEN		LEDS_GREEN
 #endif
 
+#ifdef SLS_USING_CC13xx /* launchpad board */
+#define RED			LEDS_RED
+#define BLUE		LEDS_BLUE
+#define GREEN		LEDS_GREEN
+#endif
+
+
+
 
 #define	SFD 	0x7F		/* Start of SLS frame Delimitter */
 
@@ -70,7 +78,7 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub 1-Ghz  */
 #define ENV_ID_MASK		0x4000
 
 
-#define MAX_CMD_DATA_LEN	56	
+#define MAX_CMD_DATA_LEN	54	
 #define MAX_CMD_LEN	sizeof(cmd_struct_t)
 
 enum {FALSE=0, TRUE=1,};
@@ -184,6 +192,7 @@ enum {
 	ERR_MULTICAST_CMD		= 0x06,
 	ERR_RF_LOST_POWER		= 0x07,
 	ERR_GW_LOST_POWER		= 0x08,
+	ERR_CMD_CRC_ERROR		= 0x09,
 };
 
 enum {
@@ -264,9 +273,9 @@ struct net_struct_t {
 	uint8_t			lost_connection_cnt;
 	unsigned char	app_code[16];
 	unsigned char	next_hop[16];
-	uint16_t		challenge_code;
-	uint16_t		challenge_code_res;
-	uint8_t			autheticated;
+	uint16_t 		challenge_code;
+	uint16_t 		challenge_code_res;
+	uint8_t			authenticated;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -285,6 +294,7 @@ struct cmd_struct_t {
 	uint8_t		cmd;
 	uint16_t	err_code;
 	uint8_t 	arg[MAX_CMD_DATA_LEN];
+	uint16_t	crc;
 };
 
 union float_byte_convert {

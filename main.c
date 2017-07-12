@@ -31,14 +31,14 @@
 
 #include "sls.h"
 #include "sls_cli.h"
-
+#include "util.h"
 
 #define BUFSIZE 2048
 #define MAXBUF  sizeof(cmd_struct_t)
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define MAX_TIMEOUT     5   // seconds for a long chain topology 60 nodes
+#define MAX_TIMEOUT     10   // seconds for a long chain topology 60 nodes
 #define TIME_OUT    4      //seconds
 #define NUM_RETRANSMISSIONS 1
 
@@ -104,19 +104,16 @@ static bool is_node_valid(int node);
 static bool is_node_connected(int node);
 static void auto_set_app_key();
 static void set_node_app_key (int node_id);
-static int  convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max);
-static void convert_array2str(unsigned char *bin, unsigned int binsz, char **result);
-static void float2Bytes(float val,uint8_t* bytes_array);
 static void run_reload_gw_fw();
 static int num_of_active_node();
 static void reset_reply_data();
 static char * add_ipaddr(char *buf, int nodeid);
-static float timedifference_msec(struct timeval t0, struct timeval t1);
-static uint16_t hash( uint16_t a);
+
+static void make_packet(cmd_struct_t *cmd);
+static bool check_packet(cmd_struct_t *cmd);
 
 struct timeval t0;
 struct timeval t1;
-float elapsed;
 
 time_t rawtime;
 struct tm * timeinfo;
@@ -190,12 +187,7 @@ void set_node_app_key (int node_id) {
         tx_cmd.arg[j] = byte_array[j];
     }
 
-    gettimeofday(&t0, 0);
     res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, 1);
-    gettimeofday(&t1, 0);
-    elapsed = timedifference_msec(t0, t1);
-    node_db_list[node_id].delay = elapsed;
-
     if (res == -1) {
         printf(" - ERROR: set_node_app_key process \n");
     }
@@ -576,19 +568,6 @@ static char * add_ipaddr(char *buf, int nodeid) {
 }
 
 
-/*------------------------------------------------*/
-uint16_t hash(uint16_t a) {
-    uint32_t tem;
-    tem =a;
-    tem = (a+0x7ed55d16) + (tem<<12);
-    tem = (a^0xc761c23c) ^ (tem>>19);
-    tem = (a+0x165667b1) + (tem<<5);
-    tem = (a+0xd3a2646c) ^ (tem<<9);
-    tem = (a+0xfd7046c5) + (tem<<3);
-    tem = (a^0xb55a4f09) ^ (tem>>16);
-   return tem & 0xFFFF;
-}
-
 
 /*------------------------------------------------*/
 bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_res, int *res) {
@@ -622,12 +601,6 @@ bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_
 }
 
 
-uint16_t generate_random_num() {
-    uint16_t random1, random2;
-    random1 = rand();
-    random2 = rand();    
-    return (random1<<8) | (random2);   
-}
 
 /*------------------------------------------------*/
 void run_node_discovery(){
@@ -642,7 +615,7 @@ void run_node_discovery(){
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
     for (i = 10; i < num_of_node; i++) {
-        node_db_list[i].challenge_code = generate_random_num();
+        node_db_list[i].challenge_code = gen_random_num();
         node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
         printf("\n1. Send challenge_code = 0x%04X to node = %d\n",node_db_list[i].challenge_code, i );
         printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[i].challenge_code_res);
@@ -650,8 +623,7 @@ void run_node_discovery(){
         gettimeofday(&t0, 0);
         node_authenticated = authenticate_node(i, node_db_list[i].challenge_code, node_db_list[i].challenge_code_res, &res);
         gettimeofday(&t1, 0);
-        elapsed = timedifference_msec(t0, t1);
-        node_db_list[i].delay = elapsed;
+        node_db_list[i].delay = timedifference_msec(t0, t1);
         printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[i].delay);
 
         if (res == -1) {
@@ -712,66 +684,6 @@ void print_cmd(cmd_struct_t command) {
         printf("%02X,",command.arg[i]);
     printf("]\n");
 }  
-
-/*---------------------------------------------------------------------------*/
-void float2Bytes(float val,uint8_t* bytes_array){
-  union {
-    float float_variable;
-    uint8_t temp_array[4];
-  } u;
-  u.float_variable = val;
-  memcpy(bytes_array, u.temp_array, 4);
-}
-
-
-/*------------------------------------------------*/
-void convert_array2str(unsigned char *bin, unsigned int binsz, char **result) {
-    char hex_str[]= "0123456789ABCDEF";
-    unsigned int  i;
-
-    *result = (char *)malloc(binsz * 2 + 1);
-    (*result)[binsz * 2] = 0;
-
-    if (!binsz)
-        return;
-
-    for (i = 0; i < binsz; i++) {
-        (*result)[i * 2 + 0] = hex_str[(bin[i] >> 4) & 0x0F];
-        (*result)[i * 2 + 1] = hex_str[(bin[i]     ) & 0x0F];
-    }  
-}
-
-/*------------------------------------------------*/
-int convert_str2array(const char *hex_str, unsigned char *byte_array, int byte_array_max) {
-    int hex_str_len = strlen(hex_str);
-    int i = 0, j = 0;
-    // The output array size is half the hex_str length (rounded up)
-    int byte_array_size = (hex_str_len+1)/2;
-    if (byte_array_size > byte_array_max) {
-        // Too big for the output array
-        return -1;
-    }
-    if (hex_str_len % 2 == 1){
-        // hex_str is an odd length, so assume an implicit "0" prefix
-        if (sscanf(&(hex_str[0]), "%1hhx", &(byte_array[0])) != 1){
-            return -1;
-        }
-        i = j = 1;
-    }
-    for (; i < hex_str_len; i+=2, j++){
-        if (sscanf(&(hex_str[i]), "%2hhx", &(byte_array[j])) != 1){
-            return -1;
-        }
-    }
-    return byte_array_size;
-}
-
-
-
-/*------------------------------------------------*/
-static float timedifference_msec(struct timeval t0, struct timeval t1){
-    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
-}
 
 
 /*------------------------------------------------*/
@@ -1323,9 +1235,13 @@ int main(int argc, char* argv[]) {
                 p = (char *) (&buffer); 
                 cmdPtr = (cmd_struct_t *)p;
                 emergency_reply = *cmdPtr;
+                
+                // check crc here
+                check_packet(&emergency_reply);
+
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
                 emergency_node = find_node(buffer);
-                if (emergency_reply.err_code == ERR_EMERGENCY) {
+                if (emergency_reply.type == MSG_TYPE_ASYNC) {
                     printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                     node_db_list[emergency_node].num_emergency_msg++;
@@ -1337,21 +1253,19 @@ int main(int argc, char* argv[]) {
                     strcpy (node_db_list[emergency_node].last_seen, str_time);
                     strcpy(node_db_list[emergency_node].connected,"Y");
 
-                    //show_local_db();
-
                     //send authentication here
-                    if (node_db_list[emergency_node].authenticated==FALSE) {
-                        printf("- Node %d not authenticated \n",emergency_node);
-                        node_db_list[emergency_node].challenge_code = generate_random_num();
+                    if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
+                    //if (node_db_list[emergency_node].authenticated==FALSE) {
+                        printf("- Node %d want to join network \n",emergency_node);
+                        node_db_list[emergency_node].challenge_code = gen_random_num();
                         node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
-                        printf("\n1. Send challenge_code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
-                        printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[emergency_node].challenge_code_res);
+                        printf("\n1. Send challenge code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
+                        printf(" - Expected challenge response = 0x%04X \n",node_db_list[emergency_node].challenge_code_res);
 
                         gettimeofday(&t0, 0);
                         node_authenticated = authenticate_node(emergency_node, node_db_list[emergency_node].challenge_code, node_db_list[emergency_node].challenge_code_res, &res);
                         gettimeofday(&t1, 0);
-                        elapsed = timedifference_msec(t0, t1);
-                        node_db_list[emergency_node].delay = elapsed;
+                        node_db_list[emergency_node].delay = timedifference_msec(t0, t1);
                         printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[emergency_node].delay);
 
                         if (res == -1) {
@@ -1430,14 +1344,9 @@ int main(int argc, char* argv[]) {
                 else {  // not command for GW: send to node and wait for a reply
                     printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
                     tx_cmd = *pi_cmdPtr;
-                    gettimeofday(&t0, 0);
                     res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS);
-                    gettimeofday(&t1, 0);
-                    elapsed = timedifference_msec(t0, t1);
-                    node_db_list[node_id].delay = elapsed;
-                    printf(" - GW-Cmd execution delay %.2f (ms)\n", elapsed);
+                    printf(" - GW-Cmd execution delay %.2f (ms)\n", node_db_list[node_id].delay);
             
-
                     //update local DB
                     node_db_list[node_id].num_req++;
                     if (res == -1) {
@@ -1473,6 +1382,23 @@ int main(int argc, char* argv[]) {
         sleep(1);   
 	}
     return 0;
+}
+
+
+
+//-------------------------------------------------------------------------------------------
+/* calculate CRC
+    encrypt 64 byte of cmd
+*/
+void make_packet(cmd_struct_t *cmd){
+    tx_cmd.crc = 0;
+    encrypt_payload(cmd);
+}
+
+//-------------------------------------------------------------------------------------------
+bool check_packet(cmd_struct_t *cmd){
+    decrypt_payload(cmd);
+    return check_crc16(cmd);
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1519,10 +1445,12 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
 
     num_of_retrans = 0;
     while (num_of_retrans < retrans) {
+        gettimeofday(&t0, 0);
+        /* encrypt payload here */
+        make_packet(&tx_cmd);
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
             printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
-            //print_cmd(tx_cmd);
         }
         else {
             printf("\n2. Forward REQUEST to [%s]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
@@ -1548,6 +1476,11 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
             timeinfo = localtime ( &rawtime );
             strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
             strcpy (node_db_list[nodeid].last_seen, str_time);
+            
+            /* get the execution delay */
+            gettimeofday(&t1, 0);
+            node_db_list[nodeid].delay = timedifference_msec(t0, t1);
+
             update_sql_row(nodeid);
         }
         else{
@@ -1560,6 +1493,8 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 rx_reply = *cmdPtr;
 
                 //print_cmd(rx_reply);
+                check_packet(&rx_reply);    
+
                 strcpy(node_db_list[nodeid].connected,"Y");
                 node_db_list[nodeid].last_err_code = rx_reply.err_code;
                 node_db_list[nodeid].num_of_retrans = num_of_retrans;
@@ -1568,6 +1503,10 @@ int ip6_send_cmd(int nodeid, int port, int retrans) {
                 timeinfo = localtime ( &rawtime );
                 strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
                 strcpy (node_db_list[nodeid].last_seen, str_time);
+
+                /*get the execution delay */    
+                gettimeofday(&t1, 0);
+                node_db_list[nodeid].delay  = timedifference_msec(t0, t1);
 
                 num_of_retrans = retrans;   // exit while loop
                 update_sql_row(nodeid);
