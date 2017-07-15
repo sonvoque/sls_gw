@@ -9,30 +9,136 @@
 |-------------------------------------------------------------------|
 */
 #include "util.h"
+#include "aes.h"
+#include "sls.h"
+
+
+
+/*---------------------------------------------------------------------------*/
+void phex_16(uint8_t* data_16) { // in chuoi hex 16 bytes
+    unsigned char i;
+    for(i = 0; i < 16; ++i)
+        printf("%.2x ", data_16[i]);
+    printf("\n");
+}
+
+/*---------------------------------------------------------------------------*/
+void phex_64(uint8_t* data_64) { // in chuoi hex 64 bytes
+    unsigned char i;
+    for(i = 0; i < 4; ++i) 
+        phex_16(data_64 + (i*16));
+    printf("\n");
+}
+
+/*---------------------------------------------------------------------------*/
+// ma hoa 64 bytes
+void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv) { 
+    uint8_t data_temp[MAX_CMD_LEN];
+
+    memcpy(data_temp, data, MAX_CMD_LEN);
+    printf("\nData: \n");
+    phex_64(data);
+
+    AES128_CBC_encrypt_buffer(data_encrypted, data, 64, key, iv);
+
+    printf("\nData encrypted: \n");
+    phex_64(data_encrypted);
+}
+//-------------------------------------------------------------------------------------------
+void encrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
+#if (USING_AES_128==1)
+    uint8_t payload[MAX_CMD_LEN];
+    printf(" - Encryption AES process ... done \n");
+    memcpy(&payload, cmd, MAX_CMD_LEN);
+    encrypt_cbc((uint8_t *)cmd, payload, key, iv);
+#endif
+}
+
+/*---------------------------------------------------------------------------*/
+void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key, uint8_t* iv)  {
+    uint8_t data_temp[MAX_CMD_LEN];
+
+    memcpy(data_temp, data_encrypted, MAX_CMD_LEN);
+    printf("\nData encrypted: \n");
+    phex_64(data_encrypted);
+
+    AES128_CBC_decrypt_buffer(data_decrypted+0,  data_encrypted+0,  16, key, iv);
+    AES128_CBC_decrypt_buffer(data_decrypted+16, data_encrypted+16, 16, 0, 0);
+    AES128_CBC_decrypt_buffer(data_decrypted+32, data_encrypted+32, 16, 0, 0);
+    AES128_CBC_decrypt_buffer(data_decrypted+48, data_encrypted+48, 16, 0, 0);
+
+    printf("Data decrypt: \n");
+    phex_64(data_decrypted);
+}
+
 
 //-------------------------------------------------------------------------------------------
-void encrypt_payload(cmd_struct_t *cmd) {
-	cmd_struct_t tem;
-	uint8_t payload[16];
-    printf("\n - Encryption process ... done \n");
-    tem = *cmd;
+void decrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
+#if (USING_AES_128==1)
+    decrypt_cbc((uint8_t *)cmd, (uint8_t *)cmd, key, iv);
+    printf(" - Decryption AES process ... done \n");
+#endif
+}
+
+
+//-------------------------------------------------------------------------------------------
+unsigned short gen_crc16(uint8_t *data_p, unsigned short length) {
+    unsigned char i;
+    unsigned int data;
+    unsigned int crc = 0xffff;
+    uint8_t len;
+    len = length;
+
+    if (len== 0)
+        return (~crc);
+    do    {
+        for (i=0, data=(unsigned int)0xff & *data_p++;
+            i < 8; i++, data >>= 1) {
+            if ((crc & 0x0001) ^ (data & 0x0001))
+                crc = (crc >> 1) ^ POLY;
+            else  crc >>= 1;
+        }
+    } while (--len);
+
+    crc = ~crc;
+    data = crc;
+    crc = (crc << 8) | (data >> 8 & 0xff);
+
+    return (crc);
 }
 
 //-------------------------------------------------------------------------------------------
-void decrypt_payload(cmd_struct_t *cmd) {
-    printf(" - Decryption process ... done \n");
+void gen_crc_for_cmd(cmd_struct_t *cmd) {
+    uint16_t crc16_check, i;
+    uint8_t byte_arr[MAX_CMD_LEN-2];
+
+    memcpy(&byte_arr, cmd, MAX_CMD_LEN-2);
+    crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
+    cmd->crc = (uint16_t)crc16_check;
+    printf("\n - Generate CRC16... done,  0x%04X \n", crc16_check);
+    //for (i=0; i<MAX_CMD_DATA_LEN; i++) {
+    //    printf("0x%02X \n", cmd->arg[i]);
+    //}
+    //printf("\n");
 }
 
-//-------------------------------------------------------------------------------------------
-void generate_crc16(cmd_struct_t *cmd) {
-    printf(" - Generate CRC16 process ... done \n");
-}
 
 //-------------------------------------------------------------------------------------------
-bool check_crc16(cmd_struct_t *cmd) {
-    printf(" - Check CRC16 process ... done\n");
+bool check_crc_for_cmd(cmd_struct_t *cmd) {
+    uint16_t crc16_check;
+    uint8_t byte_arr[MAX_CMD_LEN-2];
 
-    return true;
+    memcpy(&byte_arr, cmd, MAX_CMD_LEN-2);
+    crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
+
+    if (crc16_check == cmd->crc) {
+        printf(" - Check CRC16... matched, CRC-cal = 0x%04X \n", crc16_check);
+        return true;
+    }
+    else{
+        printf(" - Check CRC16... failed, CRC-cal = 0x%04X; CRC-val =  0x%04X \n",crc16_check, cmd->crc);
+        return false;        
+    }        
 }
 
 /*------------------------------------------------*/
@@ -102,7 +208,7 @@ float timedifference_msec(struct timeval t0, struct timeval t1){
 //uint8_t bytes[4];
 //float2Bytes(float_example, &bytes[0]);
 /*---------------------------------------------------------------------------*/
-void float2Bytes(float val,uint8_t* bytes_array){
+void float2Bytes(float val, uint8_t* bytes_array){
   union {
     float float_variable;
     uint8_t temp_array[4];
@@ -111,10 +217,25 @@ void float2Bytes(float val,uint8_t* bytes_array){
   memcpy(bytes_array, u.temp_array, 4);
 }
 
+
 /*---------------------------------------------------------------------------*/
 uint16_t gen_random_num() {
     uint16_t random1, random2;
-    random1 = rand();
-    random2 = rand();    
+    random1 = rand() % 255;
+    random2 = rand() % 255;    
     return (random1<<8) | (random2);   
 }
+
+/*---------------------------------------------------------------------------*/
+void gen_random_key_128(unsigned char* key){
+    int i;
+    unsigned char byte_array[16];
+    for (i=0; i<16; i++) {
+        byte_array[i] = gen_random_num() & 0xFF;
+    }
+    strcpy(key,byte_array); 
+}
+
+
+
+
