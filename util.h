@@ -38,6 +38,7 @@
 // represent the 17 bit value.
 */
 
+void print_cmd();
 void	encrypt_payload(cmd_struct_t *cmd, uint8_t* key);
 void	decrypt_payload(cmd_struct_t *cmd, uint8_t* key);
 void	gen_crc_for_cmd(cmd_struct_t *cmd);
@@ -52,5 +53,5 @@ float 	timedifference_msec(struct timeval t0, struct timeval t1);
 uint16_t gen_random_num();
 void 	gen_random_key_128(uint8_t* key);
 
-void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data,  uint8_t* key,  uint8_t* iv);
-void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted,  uint8_t* key,  uint8_t* iv);
+void 	encrypt_cbc(uint8_t* data_encrypted, uint8_t* data,  uint8_t* key,  uint8_t* iv);
+void  	decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted,  uint8_t* key,  uint8_t* iv);

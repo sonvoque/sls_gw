@@ -73,7 +73,7 @@ static  char *pi_p;
 static  int node_id, num_of_node, timeout_val;
 
 /*prototype definition */
-static void print_cmd();
+
 static void prepare_cmd();
 
 static int  read_node_list();
@@ -84,6 +84,8 @@ static void init_main();
 static bool is_cmd_of_gw(cmd_struct_t cmd);
 static void process_gw_cmd(cmd_struct_t cmd, int nodeid);
 
+
+/* database functions */
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
 static int  execute_sql_cmd(char *sql);
@@ -92,7 +94,6 @@ static void show_local_db();
 static void update1_sql_db();
 static void update2_sql_db();
 static void update_sql_db();
-
 static void update1_sql_row(int nodeid);
 static void update2_sql_row(int nodeid);
 static void update_sql_row(int nodeid);
@@ -109,9 +110,10 @@ static int num_of_active_node();
 static void reset_reply_data();
 static char* add_ipaddr(char *buf, int nodeid);
 
+static void gen_app_key_for_node(int nodeid);
+
 static void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en);
 static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encryption_en);
-static void gen_app_key_for_node(int nodeid);
 
 
 struct timeval t0;
@@ -122,6 +124,8 @@ struct tm * timeinfo;
 
 MYSQL *con;
 char *sql_cmd; 
+
+/* database infor */
 static char sql_server_ipaddr[20] ="localhost";
 static char sql_username[20]= "root";
 static char sql_password[20]= "Son100480";
@@ -149,7 +153,6 @@ void gen_app_key_for_node(int nodeid) {
 /*------------------------------------------------*/
 void init_main() {
     int i;
-
     timeout_val = TIME_OUT;
     strcpy(node_db_list[0].connected,"Y");
     node_db_list[0].authenticated = TRUE;
@@ -180,7 +183,6 @@ void get_db_row(MYSQL_ROW row, int i) {
     //node_db_list[i].num_of_retrans = atoi(row[9]);
     strcpy(node_db_list[i].app_key,row[15]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
-
     //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
     //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
 #endif
@@ -216,13 +218,10 @@ void set_node_app_key (int node_id) {
 /*------------------------------------------------*/
 void auto_set_app_key() {
     int res, i, j;
-
     printf("\nIII. AUTO SET APP KEY PROCESS.....\n");
-    for (i = 1; i < num_of_node; i++) {
-        if (is_node_connected(i)) {
+    for (i = 1; i < num_of_node; i++)
+        if (is_node_connected(i)) 
             set_node_app_key(i);
-        }    
-    }
 }
 
 
@@ -231,7 +230,6 @@ void update1_sql_row(int nodeid) {
 #ifdef USING_SQL_SERVER    
     char sql[400];
     int i;
-
     char *result;
     char buf[MAX_CMD_DATA_LEN];
 
@@ -361,7 +359,8 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\nLOCAL DATABASE: size = %d (bytes) \n", sizeof(node_db_list));
+    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d, num_of_nodes = %d \n", sizeof(node_db_list), 
+        sizeof(node_db_struct_t), num_of_node);
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
     printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
@@ -402,7 +401,7 @@ void show_sql_db() {
     if (mysql_query(con, "SELECT * FROM sls_db")) {
         finish_with_error(con);
     }
-  
+
     MYSQL_RES *result = mysql_store_result(con);
     if (result == NULL) {
         finish_with_error(con);
@@ -486,7 +485,7 @@ int read_node_list(){
 #endif    
 
     if (sql_db_error==false) {
-        printf("SQL-DB successfully reading node infor from SQL DB....\n");    
+        printf("SQL-DB: successfully reading node infor from DB....\n");    
     }
     else {
         printf("SQL-DB error: reading node infor from config file....\n");    
@@ -682,21 +681,6 @@ void prepare_cmd() {
     tx_cmd.seq ++;
 }
 
-
-/*------------------------------------------------*/
-void print_cmd(cmd_struct_t command) {
-    int i;
-    printf("\nSFD=0x%02X; ",command.sfd);
-    printf("node_id=%02d; ",command.len);
-    printf("seq=%02d; ",command.seq);
-    printf("type=0x%02X; ",command.type);
-    printf("cmd=0x%02X; ",command.cmd);
-    printf("err_code=0x%04X; \n",command.err_code); 
-    printf("data=[");
-    for (i=0;i<MAX_CMD_DATA_LEN;i++) 
-        printf("%02X,",command.arg[i]);
-    printf("]\n");
-}  
 
 
 /*------------------------------------------------*/
@@ -1234,8 +1218,8 @@ int main(int argc, char* argv[]) {
 
 
     // main loop
-    printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
-    printf("\nIV. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
+    printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+    printf("\n V. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
     for (;;) {    
         // waiting for EMERGENCY msg
         //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
@@ -1407,11 +1391,14 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     unsigned char key_arr[16];
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
 
+
     tx_cmd.crc = 0;
     gen_crc_for_cmd(cmd);
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
+    printf(" - ASES process ... %d\n", encryption_en);
+    printf(" - Make Tx packet for node %d...done\n", nodeid);
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1423,6 +1410,8 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
         decrypt_payload(cmd, key_arr);
     }
 
+    printf(" - ASES process ... %d\n", encryption_en);
+    printf(" - Check RX packet for node %d... done\n", nodeid);
     return check_crc_for_cmd(cmd);
 }
 
@@ -1471,8 +1460,13 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     num_of_retrans = 0;
     while (num_of_retrans < retrans) {
         gettimeofday(&t0, 0);
+
         /* encrypt payload here */
         make_packet_for_node(&tx_cmd, nodeid, false);
+
+        //for testing CRC:
+        //tx_cmd.seq = random();
+
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
             printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        

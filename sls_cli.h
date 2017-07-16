@@ -39,10 +39,11 @@
 #define SLS_GW_HELLO 			"gw_hello"
 #define SLS_REPAIR_ROOT			"nw_repair_root"
 
-#define AUTO_SET_APP_KEY		1
 #define SLS_SET_APP_KEY			"set_app_key"
 #define SLS_GET_APP_KEY			"get_app_key"
 #define SLS_APP_KEY_128 		"CAFEBEAFDEADFEEE0123456789ABCDEF"
+#define AUTO_SET_APP_KEY		1
+
 
 typedef enum {false=0, true=1} bool;
 
@@ -66,10 +67,10 @@ struct node_db_struct_t {
 	int		    tx_power;
 	int 		num_emergency_msg;
 	uint8_t 	last_emergency_msg[MAX_CMD_DATA_LEN];
-	char		next_hop_addr[16];			//byte array
-	char		next_hop_link_addr[40];		// link address string
+	char		next_hop_addr[16];						//byte array
+	char		next_hop_link_addr[40];					// link address string
 	float		delay;
-	double		rdr;	//request delivery rate
+	double		rdr;									//request delivery rate
 	uint16_t	challenge_code;
 	uint16_t	challenge_code_res;
 	uint8_t		authenticated;

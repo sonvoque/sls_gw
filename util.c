@@ -13,6 +13,20 @@
 #include "sls.h"
 
 
+/*------------------------------------------------*/
+void print_cmd(cmd_struct_t command) {
+    int i;
+    printf("\nSFD=0x%02X; ",command.sfd);
+    printf("node_id=%02d; ",command.len);
+    printf("seq=%02d; ",command.seq);
+    printf("type=0x%02X; ",command.type);
+    printf("cmd=0x%02X; ",command.cmd);
+    printf("err_code=0x%04X; \n",command.err_code); 
+    printf("data=[");
+    for (i=0;i<MAX_CMD_DATA_LEN;i++) 
+        printf("%02X,",command.arg[i]);
+    printf("]\n");
+}  
 
 /*---------------------------------------------------------------------------*/
 void phex_16(uint8_t* data_16) { // in chuoi hex 16 bytes
