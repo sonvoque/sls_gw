@@ -1321,7 +1321,7 @@ int main(int argc, char* argv[]) {
         fd.events = POLLIN;
         res = poll(&fd, 1, timeout*1000); 
         if (res >0) {
-            pi_recvlen = recv(connfd, &pi_buf, 1023, 0);
+            pi_recvlen = recv(connfd, &pi_buf, MAXBUF, 0);
             if (pi_recvlen > 0) {
                 printf("1. Received a COMMAND (%d bytes)\n", pi_recvlen);
                		
@@ -1390,7 +1390,6 @@ int main(int argc, char* argv[]) {
 void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en){
     unsigned char key_arr[16];
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
-
 
     tx_cmd.crc = 0;
     gen_crc_for_cmd(cmd);

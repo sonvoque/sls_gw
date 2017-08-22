@@ -38,7 +38,7 @@
 // represent the 17 bit value.
 */
 
-void print_cmd();
+void 	print_cmd();
 void	encrypt_payload(cmd_struct_t *cmd, uint8_t* key);
 void	decrypt_payload(cmd_struct_t *cmd, uint8_t* key);
 void	gen_crc_for_cmd(cmd_struct_t *cmd);
