@@ -142,30 +142,6 @@ void finish_with_error(MYSQL *con) {
 }
 
 /*------------------------------------------------*/
-void gen_app_key_for_node(int nodeid) {
-    unsigned char byte_array[16];
-    char *result;
-    gen_random_key_128(byte_array);
-    convert_array2str(byte_array,sizeof(byte_array),&result);
-    strcpy(node_db_list[nodeid].app_key, result);
-}
-
-/*------------------------------------------------*/
-void init_main() {
-    int i;
-    timeout_val = TIME_OUT;
-    strcpy(node_db_list[0].connected,"Y");
-    node_db_list[0].authenticated = TRUE;
-    for (i=1;i<num_of_node; i++) {
-        gen_app_key_for_node(i);
-    }
-    update_sql_db();
-    //show_sql_db();
-    printf("\n -  GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n\n", num_of_node );
-}
-
-
-/*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
 #ifdef USING_SQL_SERVER    
     if (i==0)
@@ -190,15 +166,60 @@ void get_db_row(MYSQL_ROW row, int i) {
 
 
 /*------------------------------------------------*/
+void gen_app_key_for_node(int nodeid) {
+    uint8_t i;
+    unsigned char byte_array[16];
+    char *result;
+
+    gen_random_key_128(byte_array);
+    convert_array2str(byte_array,sizeof(byte_array),&result);
+    strcpy(node_db_list[nodeid].app_key, result);
+    
+    if (nodeid>=10) {
+        printf("Gen random key for node = %d: ", nodeid);
+        for (i = 0; i<16; i++) {
+            printf("0x%02X,",byte_array[i]);
+        }
+        printf("\n");
+        //printf("String key %s\n", node_db_list[nodeid].app_key);
+    }
+}
+
+/*------------------------------------------------*/
+void init_main() {
+    int i;
+    timeout_val = TIME_OUT;
+    strcpy(node_db_list[0].connected,"Y");
+    node_db_list[0].authenticated = TRUE;
+
+
+    printf("\n -  GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n\n", num_of_node );
+    for (i=1;i<num_of_node; i++) {
+        gen_app_key_for_node(i);
+        node_db_list[i].encryption_phase = FALSE;
+    }
+    update_sql_db();
+    //show_sql_db();
+}
+
+
+/*------------------------------------------------*/
 void set_node_app_key (int node_id) {
-    int res, j;
+    int res, j, i;
     unsigned char byte_array[16];
 
     tx_cmd.cmd = CMD_SET_APP_KEY;    
     tx_cmd.type = MSG_TYPE_HELLO;
     tx_cmd.err_code = 0;
     convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
-    //printf("Node %d key = %s \n", i, node_db_list[i].app_key );
+
+    printf("Set key node %d has key: ", node_id);
+    for (i = 0; i<16; i++) {
+        printf("0x%02X,", byte_array[i]);
+    }
+    printf("\n");
+
+
     for (j = 0; j<16; j++) {
         tx_cmd.arg[j] = byte_array[j];
     }
@@ -716,7 +737,7 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
 
     num_timeout=0;
     num_rep=0;
-    printf("Executing broadcast commmand: subcmd = 0x%02X, arg = %d ...\n", cmd.cmd, val);
+    printf(" - Executing broadcast commmand: subcmd = 0x%02X, arg = %d ...\n", cmd.cmd, val);
 
     err_code = ERR_NORMAL;
     for (i = 1; i < num_of_node; i++) {
@@ -828,7 +849,7 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
     multicast_cmd = cmd.arg[0];
     num_timeout=0;
     num_rep=0;
-    printf("Executing multicast command: subcmd = 0x%02X...\n", multicast_cmd);
+    printf(" - Executing multicast command: subcmd = 0x%02X...\n", multicast_cmd);
 
     err_code = ERR_NORMAL;
     for (i = 0; i < num_multicast_node; i++) {
@@ -882,7 +903,7 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
     num_rep=0;
     broadcast_cmd = cmd.arg[0];
     err_code = ERR_NORMAL;    
-    printf("Executing broadcast general command: subcmd = 0x%02X ...\n", broadcast_cmd);
+    printf(" - Executing broadcast general command: subcmd = 0x%02X ...\n", broadcast_cmd);
 
     for (i = 1; i < num_of_node; i++) {
         /* prepare tx_cmd to send to RF nodes*/
@@ -1233,11 +1254,12 @@ int main(int argc, char* argv[]) {
                 cmdPtr = (cmd_struct_t *)p;
                 emergency_reply = *cmdPtr;
                 
-                // check crc here
-                check_packet_for_node(&emergency_reply, emergency_node,false);
-
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
                 emergency_node = find_node(buffer);
+
+                // check crc here
+                check_packet_for_node(&emergency_reply, emergency_node, false);
+
                 if (emergency_reply.type == MSG_TYPE_ASYNC) {
                     printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
@@ -1388,7 +1410,9 @@ int main(int argc, char* argv[]) {
     encrypt 64 byte of cmd
 */
 void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en){
+    uint8_t i;
     unsigned char key_arr[16];
+    
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
 
     tx_cmd.crc = 0;
@@ -1396,20 +1420,28 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
-    printf(" - ASES process ... %d\n", encryption_en);
+    printf(" - AES process ... %d\n", encryption_en);
     printf(" - Make Tx packet for node %d...done\n", nodeid);
 }
 
 //-------------------------------------------------------------------------------------------
 bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en){
+    uint8_t i;
     unsigned char key_arr[16];
+
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
+
+    printf(" - Check packet for Node %d key = ", nodeid);
+    for (i = 0; i<16; i++) {
+        printf("0x%02X ",key_arr[i]);
+    }
+    printf("\n");
 
     if (encryption_en==true) {
         decrypt_payload(cmd, key_arr);
     }
 
-    printf(" - ASES process ... %d\n", encryption_en);
+    printf(" - AES process ... %d\n", encryption_en);
     printf(" - Check RX packet for node %d... done\n", nodeid);
     return check_crc_for_cmd(cmd);
 }
@@ -1461,7 +1493,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
         gettimeofday(&t0, 0);
 
         /* encrypt payload here */
-        make_packet_for_node(&tx_cmd, nodeid, false);
+        make_packet_for_node(&tx_cmd, nodeid, encryption_en);
 
         //for testing CRC:
         //tx_cmd.seq = random();
@@ -1511,7 +1543,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
                 rx_reply = *cmdPtr;
 
                 //print_cmd(rx_reply);
-                check_packet_for_node(&rx_reply, nodeid, false);    
+                check_packet_for_node(&rx_reply, nodeid, encryption_en);    
 
                 strcpy(node_db_list[nodeid].connected,"Y");
                 node_db_list[nodeid].last_err_code = rx_reply.err_code;

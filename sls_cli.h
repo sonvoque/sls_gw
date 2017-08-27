@@ -44,6 +44,8 @@
 #define SLS_APP_KEY_128 		"CAFEBEAFDEADFEEE0123456789ABCDEF"
 #define AUTO_SET_APP_KEY		1
 
+#define SLS_USING_AES_128		0  //set this to enable AES-128 encryption
+
 
 typedef enum {false=0, true=1} bool;
 
@@ -60,6 +62,7 @@ struct node_db_struct_t {
 	int 		num_of_retrans;
 	char		last_seen[20];
 	char		app_key[32];
+	uint8_t		key[16];
 	uint8_t		channel_id;
 	int 		rssi;
 	int 		lqi;
@@ -74,6 +77,8 @@ struct node_db_struct_t {
 	uint16_t	challenge_code;
 	uint16_t	challenge_code_res;
 	uint8_t		authenticated;
+	uint8_t		encryption_phase;
+
 };
 
 
