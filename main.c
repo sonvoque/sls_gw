@@ -40,7 +40,7 @@
 #define clear() printf("\033[H\033[J")
 #define MAX_TIMEOUT     10   // seconds for a long chain topology 60 nodes
 #define TIME_OUT    4      //seconds
-#define NUM_RETRANSMISSIONS 1
+#define NUM_RETRANSMISSIONS 2
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -175,14 +175,12 @@ void gen_app_key_for_node(int nodeid) {
     convert_array2str(byte_array,sizeof(byte_array),&result);
     strcpy(node_db_list[nodeid].app_key, result);
     
-    if (nodeid>=10) {
-        printf("Gen random key for node = %d: ", nodeid);
-        for (i = 0; i<16; i++) {
-            printf("0x%02X,",byte_array[i]);
-        }
-        printf("\n");
-        //printf("String key %s\n", node_db_list[nodeid].app_key);
+    printf(" - Key for node = %d: ", nodeid);
+    for (i = 0; i<16; i++) {
+        printf("0x%02X,",byte_array[i]);
     }
+    printf("\n");
+    //printf("String key %s\n", node_db_list[nodeid].app_key);
 }
 
 /*------------------------------------------------*/
@@ -193,11 +191,12 @@ void init_main() {
     node_db_list[0].authenticated = TRUE;
 
 
-    printf("\n -  GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n\n", num_of_node );
+    printf("\n - GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n", num_of_node );
     for (i=1;i<num_of_node; i++) {
         gen_app_key_for_node(i);
         node_db_list[i].encryption_phase = FALSE;
     }
+    printf("\n");
     update_sql_db();
     //show_sql_db();
 }
@@ -213,7 +212,7 @@ void set_node_app_key (int node_id) {
     tx_cmd.err_code = 0;
     convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
 
-    printf("Set key node %d has key: ", node_id);
+    printf("\n - Set key for node %d, key: ", node_id);
     for (i = 0; i<16; i++) {
         printf("0x%02X,", byte_array[i]);
     }
@@ -233,6 +232,7 @@ void set_node_app_key (int node_id) {
     }  
     else { 
         printf(" - Set App Key for node %d [%s] successful \n", node_id, node_db_list[node_id].ipv6_addr);   
+        node_db_list[node_id].encryption_phase = TRUE;
     }
 }
 
@@ -647,7 +647,7 @@ void run_node_discovery(){
 
 
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
-    for (i = 10; i < num_of_node; i++) {
+    for (i = 1; i < num_of_node; i++) {
         node_db_list[i].challenge_code = gen_random_num();
         node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
         printf("\n1. Send challenge_code = 0x%04X to node = %d\n",node_db_list[i].challenge_code, i );
@@ -1177,7 +1177,7 @@ int main(int argc, char* argv[]) {
 
     char str_time[80];
 
-    uint16_t rssi_rx;
+    uint16_t rssi_rx, old_seq;
     char buf[100];
     bool node_authenticated = false;
     uint32_t rx_res;
@@ -1239,8 +1239,8 @@ int main(int argc, char* argv[]) {
 
 
     // main loop
-    printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
-    printf("\n V. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
+    printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS, and PORT %d for ASYNC MSG\n", SERVICE_PORT, SLS_EMERGENCY_PORT);
+    //printf("\n V. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
     for (;;) {    
         // waiting for EMERGENCY msg
         //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
@@ -1275,6 +1275,7 @@ int main(int argc, char* argv[]) {
                     //send authentication here
                     if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
                     //if (node_db_list[emergency_node].authenticated==FALSE) {
+                        node_db_list[emergency_node].encryption_phase = FALSE;
                         printf("- Node %d want to join network \n",emergency_node);
                         node_db_list[emergency_node].challenge_code = gen_random_num();
                         node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
@@ -1315,6 +1316,7 @@ int main(int argc, char* argv[]) {
                             }
                         }
                     }
+
                     update_sql_row(emergency_node);
                     show_local_db();
                 }
@@ -1352,16 +1354,19 @@ int main(int argc, char* argv[]) {
   		        pi_rx_reply = *pi_cmdPtr;
 		
                 node_id = pi_cmdPtr->len;
+                old_seq = pi_cmdPtr->seq;
                 rx_reply = *pi_cmdPtr;
 
                 gettimeofday(&t0, 0);
                 if (is_cmd_of_gw(*pi_cmdPtr)==true) {
-                    printf(" - Command Analysis: received GW command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                    printf(" - Command Analysis: received GW command, cmdID=0x%02X, seq=0x%04X \n", pi_cmdPtr->cmd, pi_cmdPtr->seq);
                     process_gw_cmd(*pi_cmdPtr, node_id);
+                    gettimeofday(&t1, 0);
+                    printf(" - GW-Cmd execution delay %.2f (ms)\n", timedifference_msec(t0,t1));
                     update_sql_db();
                 }
                 else {  // not command for GW: send to node and wait for a reply
-                    printf(" - Command Analysis: received LED command, cmdID=0x%02X \n", pi_cmdPtr->cmd);
+                    printf(" - Command Analysis: received LED command, cmdID=0x%02X, seq=0x%04X \n", pi_cmdPtr->cmd, pi_cmdPtr->seq);
                     tx_cmd = *pi_cmdPtr;
                     res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
                     printf(" - GW-Cmd execution delay %.2f (ms)\n", node_db_list[node_id].delay);
@@ -1386,6 +1391,8 @@ int main(int argc, char* argv[]) {
                     update_sql_row(node_id);
                 }
                 // send REPLY to sender NODE
+                // update corresponding sequence
+                rx_reply.seq = old_seq;
                 sprintf(pi_buf, "ACK %d", pi_msgcnt++);
                 printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
                 write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
@@ -1393,7 +1400,7 @@ int main(int argc, char* argv[]) {
                 //    perror("sendto");
 
                 show_local_db();
-                printf("\nIII. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+                printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS, and PORT %d for ASYNC MSG\n", SERVICE_PORT, SLS_EMERGENCY_PORT);
             }
         }
         

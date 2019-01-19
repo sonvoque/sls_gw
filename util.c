@@ -47,6 +47,7 @@ void phex_64(uint8_t* data_64) { // in chuoi hex 64 bytes
 /*---------------------------------------------------------------------------*/
 // ma hoa 64 bytes
 void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv) { 
+    /*
     uint8_t data_temp[MAX_CMD_LEN];
 
     memcpy(data_temp, data, MAX_CMD_LEN);
@@ -57,6 +58,7 @@ void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* 
 
     //printf("\nData encrypted: \n");
     //phex_64(data_encrypted);
+    */
 }
 //-------------------------------------------------------------------------------------------
 void encrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
@@ -68,6 +70,7 @@ void encrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
 
 /*---------------------------------------------------------------------------*/
 void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key, uint8_t* iv)  {
+    /*
     uint8_t data_temp[MAX_CMD_LEN];
 
 
@@ -89,6 +92,7 @@ void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key
 
     printf("Data decrypt: \n");
     phex_64(data_decrypted);
+    */
 }
 
 

@@ -6,8 +6,8 @@
 | Version: 1.0                                                      |
 | Author: sonvq@hcmut.edu.vn                                        |
 | Date: 01/2017                                                     |
-|-------------------------------------------------------------------|
-*/
+| HW support in ISM band: TelosB, CC2538, CC2530, CC1310, z1        |
+|-------------------------------------------------------------------|*/
 
 #ifndef SLS_H_
 #define SLS_H_
@@ -29,7 +29,7 @@ enum {
 
 
 /*
-SLS_USING_HW = 0 : for compiling to SKY used in Cooja simulation
+SLS_USING_HW = 0 : for compiling to SKY/Z1 used in Cooja simulation
 SLS_USING_HW = 1 : for compiling to CC2538dk: 2.4Ghz
 SLS_USING_HW = 2 : for compiling to CC2530DK: 2.4Ghz  
 SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
@@ -47,6 +47,10 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 #if (SLS_USING_HW==3)
 #define SLS_USING_CC13xx
 #endif
+#if (SLS_USING_HW==4)
+#define SLS_USING_Z1
+#endif
+
 
 //redefine leds
 #ifdef SLS_USING_CC2538DK
@@ -67,8 +71,11 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 #define GREEN		LEDS_GREEN
 #endif
 
-
-#define USING_AES_128	1  //set this to enable AES encryption
+#ifdef SLS_USING_Z1 /* launchpad board */
+#define RED			LEDS_RED
+#define BLUE		LEDS_BLUE
+#define GREEN		LEDS_GREEN
+#endif
 
 
 #define	SFD 	0x7F		/* Start of SLS frame Delimitter */
@@ -80,18 +87,21 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 
 
 #define MAX_CMD_DATA_LEN	54	
-#define MAX_CMD_LEN	sizeof(cmd_struct_t)
+#define MAX_CMD_LEN			sizeof(cmd_struct_t)
 
 enum {FALSE=0, TRUE=1,};
+
+#define CC2538DK_HAS_SENSOR  FALSE
 
 #define DEFAULT_EMERGENCY_STATUS TRUE
 #define EMERGENCY_TIME  30 		//seconds
 
 
+#define SLS_USING_AES_128		0  //set this to enable AES-128 encryption
 #define POLY 0x8408
-
 static uint8_t iv[16]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, \
                            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+
 
 enum {	
 	// msg type
@@ -285,13 +295,15 @@ struct net_struct_t {
 };
 
 /*---------------------------------------------------------------------------*/
-//	sfd = 0x7F
-//	seq: transaction id;
-//	type: 	REQUEST/REPLY/HELLO
-//	len: 	used for App node_id
-//	cmd:	command id
-//	err_code: code returned in REPLY, sender check this field to know the REQ status
-//	arg[16]: data payload
+//	sfd[1] 			= 0x7F (Start of Frame Delimitter)
+//	len[1]: 		used for App node_id
+//	seq[2]: 		transaction id;
+//	type[1]: 		REQUEST/REPLY/HELLO
+//	cmd[1]:			command id
+//	err_code[2]: 	code returned in REPLY, sender check this field to know the REQ status
+//	arg[54]: 		data payload
+//	crc[2]			CRC check
+
 struct cmd_struct_t {
 	uint8_t  	sfd;
 	uint8_t 	len;
@@ -313,6 +325,19 @@ typedef struct net_struct_t		net_struct_t;
 typedef struct gw_struct_t		gw_struct_t;
 typedef struct led_struct_t		led_struct_t;
 
-
-
+//void 		print_cmd_data(cmd_struct_t command);
+/*
+uint16_t 	hash( uint16_t a); 
+void		gen_crc_for_cmd(cmd_struct_t *cmd);
+bool	 	check_crc_for_cmd(cmd_struct_t *cmd);
+uint16_t 	gen_crc16(uint8_t *data_p, unsigned short  length);
+void 		encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv);
+void 		decrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv);
+void 		encrypt_payload(cmd_struct_t *cmd, uint8_t* key);
+void 		decrypt_payload(cmd_struct_t *cmd, uint8_t* key);
+void		float2Bytes(float val,uint8_t* bytes_array);
+void 		phex_16(uint8_t* data_16);
+void 		phex_64(uint8_t* data_64);
+*/
+	
 #endif /* SLS_H_ */
