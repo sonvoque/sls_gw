@@ -40,7 +40,7 @@
 #define clear() printf("\033[H\033[J")
 #define MAX_TIMEOUT     10   // seconds for a long chain topology 60 nodes
 #define TIME_OUT    4      //seconds
-#define NUM_RETRANSMISSIONS 2
+#define NUM_RETRANSMISSIONS 3       // for command only
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -1261,7 +1261,7 @@ int main(int argc, char* argv[]) {
                 check_packet_for_node(&emergency_reply, emergency_node, false);
 
                 if (emergency_reply.type == MSG_TYPE_ASYNC) {
-                    printf("- Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                    printf(" - Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
                     //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                     node_db_list[emergency_node].num_emergency_msg++;
                     memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
@@ -1272,11 +1272,18 @@ int main(int argc, char* argv[]) {
                     strcpy (node_db_list[emergency_node].last_seen, str_time);
                     strcpy(node_db_list[emergency_node].connected,"Y");
 
+                    if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
+                        printf(" - Emergency data: %d bytes \n",MAX_CMD_DATA_LEN);
+                        for (i=0; i<MAX_CMD_DATA_LEN; i++)
+                            printf("%d,",emergency_reply.arg[i]);     
+                        printf("\n");
+                    }
+
                     //send authentication here
                     if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
                     //if (node_db_list[emergency_node].authenticated==FALSE) {
                         node_db_list[emergency_node].encryption_phase = FALSE;
-                        printf("- Node %d want to join network \n",emergency_node);
+                        printf(" - Node %d want to join network \n",emergency_node);
                         node_db_list[emergency_node].challenge_code = gen_random_num();
                         node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
                         printf("\n1. Send challenge code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
@@ -1393,8 +1400,8 @@ int main(int argc, char* argv[]) {
                 // send REPLY to sender NODE
                 // update corresponding sequence
                 rx_reply.seq = old_seq;
-                sprintf(pi_buf, "ACK %d", pi_msgcnt++);
-                printf("4. Sending RESPONE to user \"%s\"\n", pi_buf);
+                //sprintf(pi_buf, "ACK %d", pi_msgcnt++);
+                printf("4. Sending RESPONE to user ACK-%d, seq = 0x%04X \n", pi_msgcnt++, old_seq);
                 write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
                 //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
                 //    perror("sendto");
@@ -1496,6 +1503,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
 
 
     num_of_retrans = 0;
+    //printf("NUMBER OF RETRIALS = %d \n", retrans);        
     while (num_of_retrans < retrans) {
         gettimeofday(&t0, 0);
 
