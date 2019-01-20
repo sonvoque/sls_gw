@@ -38,9 +38,12 @@
 #define SERVICE_PORT	21234	/* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
-#define MAX_TIMEOUT     10   // seconds for a long chain topology 60 nodes
-#define TIME_OUT    4      //seconds
-#define NUM_RETRANSMISSIONS 3       // for command only
+
+#define MAX_TIMEOUT     10              // seconds for a long chain topology 60 nodes: 10s
+#define TIME_OUT    2                   // seconds: recommend 4s
+#define NUM_RETRANS         5           // for commands
+#define NUM_RETRANS_AUTHEN  5           // for authentication
+#define NUM_RETRANS_SET_KEY  5          // for setting application key
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -73,9 +76,7 @@ static  char *pi_p;
 static  int node_id, num_of_node, timeout_val;
 
 /*prototype definition */
-
 static void prepare_cmd();
-
 static int  read_node_list();
 static void run_node_discovery();
 static bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_res, int *res);
@@ -120,7 +121,7 @@ struct timeval t0;
 struct timeval t1;
 
 time_t rawtime;
-struct tm * timeinfo;
+struct tm *timeinfo;
 
 MYSQL *con;
 char *sql_cmd; 
@@ -144,9 +145,12 @@ void finish_with_error(MYSQL *con) {
 /*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
 #ifdef USING_SQL_SERVER    
-    if (i==0)
+    
+    /* if border router: always connected */
+    if (i==0) {
         strcpy(node_db_list[i].connected,"Y");
-
+    }    
+    
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
@@ -175,7 +179,7 @@ void gen_app_key_for_node(int nodeid) {
     convert_array2str(byte_array,sizeof(byte_array),&result);
     strcpy(node_db_list[nodeid].app_key, result);
     
-    printf(" - Key for node = %d: ", nodeid);
+    printf(" - Key for node %d: ", nodeid);
     for (i = 0; i<16; i++) {
         printf("0x%02X,",byte_array[i]);
     }
@@ -222,15 +226,13 @@ void set_node_app_key (int node_id) {
     for (j = 0; j<16; j++) {
         tx_cmd.arg[j] = byte_array[j];
     }
-
-    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, 1, false);
+    // try 3 times
+    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANS_SET_KEY, false);
     if (res == -1) {
         printf(" - ERROR: set_node_app_key process \n");
-    }
-    else if (res == 0) {
+    } else if (res == 0) {
         printf(" - Set App Key for node %d [%s] failed \n", node_id, node_db_list[node_id].ipv6_addr); 
-    }  
-    else { 
+    } else { 
         printf(" - Set App Key for node %d [%s] successful \n", node_id, node_db_list[node_id].ipv6_addr);   
         node_db_list[node_id].encryption_phase = TRUE;
     }
@@ -265,8 +267,7 @@ void update1_sql_row(int nodeid) {
                 node_db_list[nodeid].pan_id, node_db_list[nodeid].tx_power,node_db_list[nodeid].last_err_code, 
                 node_db_list[nodeid].num_emergency_msg, result,
                 nodeid);
-    }
-    else {
+    } else {
         sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[nodeid].num_req, node_db_list[nodeid].num_rep, node_db_list[nodeid].num_timeout, node_db_list[nodeid].last_cmd, 
                 node_db_list[nodeid].last_seen, node_db_list[nodeid].num_of_retrans, node_db_list[nodeid].channel_id, node_db_list[nodeid].rssi, node_db_list[nodeid].lqi, 
@@ -274,6 +275,7 @@ void update1_sql_row(int nodeid) {
                 node_db_list[nodeid].num_emergency_msg, result, 
                 nodeid);
     }    
+    
     if (execute_sql_cmd(sql)==0){
         //printf("sql_cmd = %s\n", sql);
     }    
@@ -292,12 +294,12 @@ void update2_sql_row(int nodeid) {
         sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
                 node_db_list[nodeid].next_hop_link_addr, node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
                 nodeid);
-    }
-    else {
+    } else {
         sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
                 node_db_list[nodeid].next_hop_link_addr,node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
                 nodeid);
     }    
+    
     if (execute_sql_cmd(sql)==0){
         //printf("sql_cmd = %s\n", sql);
     }    
@@ -332,14 +334,14 @@ void update1_sql_db() {
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
                 node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
-        }
-        else {
+        } else {
             //printf("node %d = 'N' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='N', num_req=%d, num_rep=%d, num_timeout=%d, last_cmd=%d, last_seen='%s', num_of_retrans=%d, rf_channel=%d, rssi=%d, lqi=%d, pan_id=%d, tx_power=%d, last_err_code=%d, num_emergency_msg=%d, last_emergency_msg='%s'  WHERE node_id=%d;", 
                 node_db_list[i].num_req, node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, 
                 node_db_list[i].last_seen, node_db_list[i].num_of_retrans, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, 
                 node_db_list[i].pan_id, node_db_list[i].tx_power,node_db_list[i].last_err_code, node_db_list[i].num_emergency_msg, result, i);
         }    
+        
         if (execute_sql_cmd(sql)==0){
             //printf("sql_cmd = %s\n", sql);
         }    
@@ -358,8 +360,7 @@ void update2_sql_db() {
             //printf("node %d = 'Y' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s', delay=%f, rdr=%f, app_key='%s'  WHERE node_id=%d;", 
                 node_db_list[i].next_hop_link_addr,node_db_list[i].delay, node_db_list[i].rdr, node_db_list[i].app_key, i);
-        }
-        else {
+        } else {
             //printf("node %d = 'N' \n",i);
             sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s', delay=%f, rdr=%f, app_key='%s'  WHERE node_id=%d;", 
                 node_db_list[i].next_hop_link_addr,node_db_list[i].delay, node_db_list[i].rdr, node_db_list[i].app_key, i);
@@ -387,20 +388,21 @@ void show_local_db() {
     printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
-        if (i>0) 
+        if (i>0) {
             printf("| %2d | %24s |%2s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
                 node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
-        else
+        } else {
             printf("| %2d | %24s |*%1s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02X%02X|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
                 node_db_list[i].next_hop_addr[14],node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr);
+        }    
     }
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
 }
@@ -434,12 +436,13 @@ void show_sql_db() {
     MYSQL_ROW row;
     while ((row = mysql_fetch_row(result)))  { 
         for(i = 0; i < num_fields; i++) {
-            if (i==0)
+            if (i==0) {
                 printf("| %3s | ", row[i] ? row[i] : "NULL");
-            else if ((i==2) || (i==8))
+            } else if ((i==2) || (i==8)) {
                 printf("%24s | ", row[i] ? row[i] : "NULL");
-            else
+            } else {
                 printf("%4s | ", row[i] ? row[i] : "NULL");
+            }    
         }
         printf("\n");
     }
@@ -484,8 +487,7 @@ int read_node_list(){
     if (result == NULL) {
         finish_with_error(con);
         sql_db_error = true;
-    }
-    else {
+    } else {
         //printf("Reading DB: sls_db......\n");
     }
 
@@ -507,8 +509,7 @@ int read_node_list(){
 
     if (sql_db_error==false) {
         printf("SQL-DB: successfully reading node infor from DB....\n");    
-    }
-    else {
+    } else {
         printf("SQL-DB error: reading node infor from config file....\n");    
         num_of_node =0;
         ptr_file =fopen("node_list.txt","r");
@@ -616,7 +617,8 @@ bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_
     tx_cmd.arg[0]= (code >> 8) & 0xFF;
     tx_cmd.arg[1]= code  & 0xFF;
 
-    response = ip6_send_cmd(node_id, SLS_NORMAL_PORT, 1, false);
+    // try 5 times
+    response = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANS_AUTHEN, false);
     if (response == -1) {
         printf(" - ERROR: authetication node %d \n", node_id);
     }
@@ -650,7 +652,7 @@ void run_node_discovery(){
     for (i = 1; i < num_of_node; i++) {
         node_db_list[i].challenge_code = gen_random_num();
         node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
-        printf("\n1. Send challenge_code = 0x%04X to node = %d\n",node_db_list[i].challenge_code, i );
+        printf("\n1. Send challenge_code = 0x%04X to node %d\n",node_db_list[i].challenge_code, i );
         printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[i].challenge_code_res);
 
         gettimeofday(&t0, 0);
@@ -661,15 +663,13 @@ void run_node_discovery(){
 
         if (res == -1) {
             printf(" - ERROR: discovery process \n");
-        }
-        else if (res == 0)   {
+        } else if (res == 0)   {
             printf(" - Node %d [%s] unavailable\n", i, node_db_list[i].ipv6_addr);
             sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;", i);
             if (execute_sql_cmd(sql)==0) {
                 //printf("sql_cmd = %s\n", sql);
             }
-        }
-        else{
+        } else{
             sprintf(sql,"UPDATE sls_db SET connected='Y' WHERE node_id=%d;", i);
             if (execute_sql_cmd(sql)==0) {
             }
@@ -696,6 +696,8 @@ void run_node_discovery(){
     }
     update_sql_db();    
 }
+
+
 /*------------------------------------------------*/
 void prepare_cmd() {
     tx_cmd.sfd = SFD;
@@ -749,18 +751,16 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
 
         if (mode==ALL_NODE) {
             node_db_list[i].num_req++;
-            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
             if (res == -1) {
                 printf(" - ERROR: broadcast process \n");
                 err_code = ERR_BROADCAST_CMD;
-            }
-            else if (res == 0)   {
+            } else if (res == 0)   {
                 printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                 num_timeout++;
                 node_db_list[i].num_timeout++;
                 err_code = ERR_TIME_OUT;
-            }
-            else{
+            } else{
                 printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                 num_rep++;
                 node_db_list[i].num_rep++;
@@ -773,18 +773,16 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
         else if (mode==ODD_NODE) {
             if ((i % 2)==1) {
                 node_db_list[i].num_req++;
-                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
                 if (res == -1) {
                     printf(" - ERROR: broadcast process \n");
                     err_code = ERR_BROADCAST_CMD;
-                }
-                else if (res == 0)   {
+                } else if (res == 0)   {
                     printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                     num_timeout++;
                     node_db_list[i].num_timeout++;
                     err_code = ERR_TIME_OUT;
-                }
-                else{
+                } else {
                     printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
@@ -797,18 +795,16 @@ int execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode) {
         else if (mode==EVEN_NODE) {
             if (((i % 2)==0) && (i!=0)){
                 node_db_list[i].num_req++;
-                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
                 if (res == -1) {
                     printf(" - ERROR: broadcast process \n");
                     err_code = ERR_BROADCAST_CMD;
-                }
-                else if (res == 0)   {
+                } else if (res == 0)   {
                     printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                     num_timeout++;
                     node_db_list[i].num_timeout++;
                     err_code = ERR_TIME_OUT;
-                }
-                else{
+                } else {
                     printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
@@ -864,18 +860,16 @@ int execute_multicast_cmd(cmd_struct_t cmd) {
         executed_node = cmd.arg[i + max_data_of_cmd + 1];               //from arg[7] to...
         if (is_node_valid(executed_node)) {
             node_db_list[executed_node].num_req++;
-            res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+            res = ip6_send_cmd(executed_node, SLS_NORMAL_PORT, NUM_RETRANS, false);
             if (res == -1) {
                 printf(" - ERROR: broadcast process \n");
                 err_code = ERR_MULTICAST_CMD;
-            }
-            else if (res == 0)   {
+            } else if (res == 0)   {
                 printf(" - Send CMD to node %d [%s] failed\n", executed_node, node_db_list[executed_node].ipv6_addr);
                 num_timeout++;
                 node_db_list[executed_node].num_timeout++;
                 err_code = ERR_TIME_OUT;
-            }
-            else {
+            } else {
                 printf(" - Send CMD to node %d [%s] successful\n", executed_node, node_db_list[executed_node].ipv6_addr);   
                 num_rep++;
                 node_db_list[executed_node].num_rep++;
@@ -918,18 +912,16 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
 
         if (mode==2) {
             node_db_list[i].num_req++;
-            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+            res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
             if (res == -1) {
                 printf(" - ERROR: broadcast process \n");
                 err_code = ERR_BROADCAST_CMD;
-            }
-            else if (res == 0)   {
+            } else if (res == 0)   {
                 printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                 num_timeout++;
                 node_db_list[i].num_timeout++;
                 err_code = ERR_TIME_OUT;
-            }
-            else {
+            } else {
                 printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                 num_rep++;
                 node_db_list[i].num_rep++;
@@ -942,18 +934,16 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
         else if (mode==1){
             if ((i%2)==1) {
                 node_db_list[i].num_req++;
-                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
                 if (res == -1) {
                     printf(" - ERROR: broadcast process \n");
                     err_code = ERR_BROADCAST_CMD;
-                }
-                else if (res == 0)   {
+                } else if (res == 0)   {
                     printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                     num_timeout++;
                     node_db_list[i].num_timeout++;
                     err_code = ERR_TIME_OUT;
-                }
-                else {
+                } else {
                     printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
@@ -966,18 +956,16 @@ int execute_broadcast_general_cmd(cmd_struct_t cmd, int mode) {
         else if (mode==0){
             if (((i % 2)==0) && (i!=0)){
                 node_db_list[i].num_req++;
-                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+                res = ip6_send_cmd(i, SLS_NORMAL_PORT, NUM_RETRANS, false);
                 if (res == -1) {
                     printf(" - ERROR: broadcast process \n");
                     err_code = ERR_BROADCAST_CMD;
-                }
-                else if (res == 0)   {
+                } else if (res == 0)   {
                     printf(" - Send CMD to node %d [%s] failed\n", i, node_db_list[i].ipv6_addr);
                     num_timeout++;
                     node_db_list[i].num_timeout++;
                     err_code = ERR_TIME_OUT;
-                }
-                else {
+                } else {
                     printf(" - Send CMD to node %d [%s] successful\n", i, node_db_list[i].ipv6_addr);   
                     num_rep++;
                     node_db_list[i].num_rep++;
@@ -1257,16 +1245,16 @@ int main(int argc, char* argv[]) {
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
                 result = find_node(buffer);
                 if (result == -1) {
-                    printf(" - Got a msg from node [%s]: not found in DB \n", buffer);                    
-                }
-                else {
+                    printf(" - Got a msg from node [%s]: not found in DB \n", buffer);
+                    // can add to DB here                    
+                } else {
                     emergency_node = result;
 
                     // check crc here
                     check_packet_for_node(&emergency_reply, emergency_node, false);
 
                    if (emergency_reply.type == MSG_TYPE_ASYNC) {   
-                        printf(" - Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                        printf(" - Got an emergency msg (%d bytes) from node %d [%s]\n", emergency_status, emergency_node, buffer);
                         //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
                         node_db_list[emergency_node].num_emergency_msg++;
                         memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
@@ -1302,11 +1290,9 @@ int main(int argc, char* argv[]) {
 
                             if (res == -1) {
                                 printf(" - ERROR: authetication process \n");
-                            }
-                            else if (res == 0)   {
+                            } else if (res == 0)   {
                                 printf(" - Node %d [%s] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
-                            }
-                            else{
+                            } else{
                                 if (node_authenticated==TRUE) {
                                     printf(" - Node %d authenticated \n", emergency_node);
                                     node_db_list[emergency_node].authenticated = TRUE;
@@ -1377,25 +1363,22 @@ int main(int argc, char* argv[]) {
                     gettimeofday(&t1, 0);
                     printf(" - GW-Cmd execution delay %.2f (ms)\n", timedifference_msec(t0,t1));
                     update_sql_db();
-                }
-                else {  // not command for GW: send to node and wait for a reply
+                } else {  // not command for GW: send to node and wait for a reply
                     printf(" - Command Analysis: received LED command, cmdID=0x%02X, seq=0x%04X \n", pi_cmdPtr->cmd, pi_cmdPtr->seq);
                     tx_cmd = *pi_cmdPtr;
-                    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANSMISSIONS, false);
+                    res = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANS, false);
                     printf(" - GW-Cmd execution delay %.2f (ms)\n", node_db_list[node_id].delay);
             
                     //update local DB
                     node_db_list[node_id].num_req++;
                     if (res == -1) {
                         printf(" - ERROR: sending process \n");
-                    }
-                    else if (res == 0)   {
+                    } else if (res == 0)   {
                         //printf(" - Node %d [%s] unavailable\n", node_id, node_db_list[node_id].ipv6_addr);
                         node_db_list[node_id].num_timeout++;
                         rx_reply.err_code = ERR_TIME_OUT;
                         rx_reply.type = MSG_TYPE_REP;
-                    }
-                    else {
+                    } else {
                         //printf(" - Node %d [%s] available\n", node_id, node_db_list[node_id].ipv6_addr);   
                         node_db_list[node_id].num_rep++;
                         node_db_list[node_id].last_cmd = tx_cmd.cmd;
@@ -1403,6 +1386,8 @@ int main(int argc, char* argv[]) {
                     }         
                     update_sql_row(node_id);
                 }
+
+
                 // send REPLY to sender NODE
                 // update corresponding sequence
                 rx_reply.seq = old_seq;
@@ -1440,8 +1425,7 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
-    printf(" - AES process ... %d\n", encryption_en);
-    printf(" - Make Tx packet for node %d...done\n", nodeid);
+    printf(" - Make Tx packet for node %d...done; Encryption: %d \n", nodeid, encryption_en);
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1451,18 +1435,17 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
 
-    printf(" - Check packet for Node %d key = ", nodeid);
+    printf(" - Check packet for Node %d key = [", nodeid);
     for (i = 0; i<16; i++) {
         printf("0x%02X ",key_arr[i]);
     }
-    printf("\n");
+    printf("]\n");
 
     if (encryption_en==true) {
         decrypt_payload(cmd, key_arr);
     }
 
-    printf(" - AES process ... %d\n", encryption_en);
-    printf(" - Check RX packet for node %d... done\n", nodeid);
+    printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
     return check_crc_for_cmd(cmd);
 }
 
@@ -1522,8 +1505,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
             printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
-        }
-        else {
+        } else {
             printf("\n2. Forward REQUEST to [%s]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
         }    
 
@@ -1533,8 +1515,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
         res = poll(&fd, 1, timeout_val*1000); // timeout
         if (res == -1) {
             printf(" - ERROR: GW forwarding command \n");
-        }
-        else if (res == 0)   {
+        } else if (res == 0) {
             printf(" - Time-out: GW forwarding command \n");
             rx_reply = tx_cmd;
 
@@ -1553,8 +1534,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             node_db_list[nodeid].delay = timedifference_msec(t0, t1);
 
             update_sql_row(nodeid);
-        }
-        else{
+        } else {
             // implies (fd.revents & POLLIN) != 0
             rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0,(struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
             if (rev_bytes>=0) {
