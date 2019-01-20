@@ -1136,7 +1136,7 @@ int find_node(char *ip_addr) {
             return node_db_list[i].id;
         }
     }
-    return 0;
+    return -1;
 }
 
 
@@ -1156,7 +1156,7 @@ static void run_reload_gw_fw(){
 
 //-------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    int res, i, j;
+    int res, i, j, result;
     int option = 1;
 
     struct sockaddr_in pi_myaddr;	                      /* our address */
@@ -1255,78 +1255,84 @@ int main(int argc, char* argv[]) {
                 emergency_reply = *cmdPtr;
                 
                 inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
-                emergency_node = find_node(buffer);
+                result = find_node(buffer);
+                if (result == -1) {
+                    printf(" - Got a msg from node [%s]: not found in DB \n", buffer);                    
+                }
+                else {
+                    emergency_node = result;
 
-                // check crc here
-                check_packet_for_node(&emergency_reply, emergency_node, false);
+                    // check crc here
+                    check_packet_for_node(&emergency_reply, emergency_node, false);
 
-                if (emergency_reply.type == MSG_TYPE_ASYNC) {
-                    printf(" - Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
-                    //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
-                    node_db_list[emergency_node].num_emergency_msg++;
-                    memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
+                   if (emergency_reply.type == MSG_TYPE_ASYNC) {   
+                        printf(" - Got an emergency msg [%d bytes] from node %d [%s]\n", emergency_status, emergency_node, buffer);
+                        //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
+                        node_db_list[emergency_node].num_emergency_msg++;
+                        memcpy(node_db_list[emergency_node].last_emergency_msg,emergency_reply.arg, MAX_CMD_DATA_LEN);
                     
-                    time(&rawtime );
-                    timeinfo = localtime(&rawtime );
-                    strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
-                    strcpy (node_db_list[emergency_node].last_seen, str_time);
-                    strcpy(node_db_list[emergency_node].connected,"Y");
+                        time(&rawtime );
+                        timeinfo = localtime(&rawtime );
+                        strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
+                        strcpy (node_db_list[emergency_node].last_seen, str_time);
+                        strcpy(node_db_list[emergency_node].connected,"Y");
 
-                    if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
-                        printf(" - Emergency data: %d bytes \n",MAX_CMD_DATA_LEN);
-                        for (i=0; i<MAX_CMD_DATA_LEN; i++)
-                            printf("%d,",emergency_reply.arg[i]);     
-                        printf("\n");
-                    }
-
-                    //send authentication here
-                    if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
-                    //if (node_db_list[emergency_node].authenticated==FALSE) {
-                        node_db_list[emergency_node].encryption_phase = FALSE;
-                        printf(" - Node %d want to join network \n",emergency_node);
-                        node_db_list[emergency_node].challenge_code = gen_random_num();
-                        node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
-                        printf("\n1. Send challenge code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
-                        printf(" - Expected challenge response = 0x%04X \n",node_db_list[emergency_node].challenge_code_res);
-
-                        gettimeofday(&t0, 0);
-                        node_authenticated = authenticate_node(emergency_node, node_db_list[emergency_node].challenge_code, node_db_list[emergency_node].challenge_code_res, &res);
-                        gettimeofday(&t1, 0);
-                        node_db_list[emergency_node].delay = timedifference_msec(t0, t1);
-                        printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[emergency_node].delay);
-
-                        if (res == -1) {
-                            printf(" - ERROR: authetication process \n");
+                        if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
+                            printf(" - Emergency data: %d bytes \n",MAX_CMD_DATA_LEN);
+                            for (i=0; i<MAX_CMD_DATA_LEN; i++)
+                                printf("%d,",emergency_reply.arg[i]);     
+                            printf("\n");
                         }
-                        else if (res == 0)   {
-                            printf(" - Node %d [%s] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
-                        }
-                        else{
-                            if (node_authenticated==TRUE) {
-                                printf(" - Node %d authenticated \n", emergency_node);
-                                node_db_list[emergency_node].authenticated = TRUE;
-                                // rx_reply
-                                node_db_list[emergency_node].channel_id = rx_reply.arg[4];
-                                rssi_rx = rx_reply.arg[5];
-                                rssi_rx = (rssi_rx << 8) | rx_reply.arg[6];
-                                node_db_list[emergency_node].rssi = rssi_rx-200;
-                                node_db_list[emergency_node].lqi = rx_reply.arg[7];
-                                node_db_list[emergency_node].tx_power = rx_reply.arg[8];
-                                node_db_list[emergency_node].pan_id = (rx_reply.arg[9] << 8) | (rx_reply.arg[10]);
-                                for (j=0; j<16; j++) {
-                                    node_db_list[emergency_node].next_hop_addr[j] = rx_reply.arg[11+j];
-                                } 
-                                add_ipaddr(buf,emergency_node);
-                                strcpy(node_db_list[emergency_node].next_hop_link_addr, buf);
-                                printf(" - Node %d [%s] available, next-hop link addr = %s\n", emergency_node, node_db_list[emergency_node].ipv6_addr, node_db_list[emergency_node].next_hop_link_addr);
-                                set_node_app_key(emergency_node);
+
+                        //send authentication here
+                        if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
+                        //if (node_db_list[emergency_node].authenticated==FALSE) {
+                            node_db_list[emergency_node].encryption_phase = FALSE;
+                            printf(" - Node %d want to join network \n",emergency_node);
+                            node_db_list[emergency_node].challenge_code = gen_random_num();
+                            node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
+                            printf("\n1. Send challenge code = 0x%04X to joined node %d\n",node_db_list[emergency_node].challenge_code,emergency_node );
+                            printf(" - Expected challenge response = 0x%04X \n",node_db_list[emergency_node].challenge_code_res);
+
+                            gettimeofday(&t0, 0);
+                            node_authenticated = authenticate_node(emergency_node, node_db_list[emergency_node].challenge_code, node_db_list[emergency_node].challenge_code_res, &res);
+                            gettimeofday(&t1, 0);
+                            node_db_list[emergency_node].delay = timedifference_msec(t0, t1);
+                            printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[emergency_node].delay);
+
+                            if (res == -1) {
+                                printf(" - ERROR: authetication process \n");
+                            }
+                            else if (res == 0)   {
+                                printf(" - Node %d [%s] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
+                            }
+                            else{
+                                if (node_authenticated==TRUE) {
+                                    printf(" - Node %d authenticated \n", emergency_node);
+                                    node_db_list[emergency_node].authenticated = TRUE;
+                                    // rx_reply
+                                    node_db_list[emergency_node].channel_id = rx_reply.arg[4];
+                                    rssi_rx = rx_reply.arg[5];
+                                    rssi_rx = (rssi_rx << 8) | rx_reply.arg[6];
+                                    node_db_list[emergency_node].rssi = rssi_rx-200;
+                                    node_db_list[emergency_node].lqi = rx_reply.arg[7];
+                                    node_db_list[emergency_node].tx_power = rx_reply.arg[8];
+                                    node_db_list[emergency_node].pan_id = (rx_reply.arg[9] << 8) | (rx_reply.arg[10]);
+                                    for (j=0; j<16; j++) {
+                                        node_db_list[emergency_node].next_hop_addr[j] = rx_reply.arg[11+j];
+                                    } 
+                                    add_ipaddr(buf,emergency_node);
+                                    strcpy(node_db_list[emergency_node].next_hop_link_addr, buf);
+                                    printf(" - Node %d [%s] available, next-hop link addr = %s\n", emergency_node, node_db_list[emergency_node].ipv6_addr, node_db_list[emergency_node].next_hop_link_addr);
+                                    set_node_app_key(emergency_node);
+                                }
                             }
                         }
-                    }
 
-                    update_sql_row(emergency_node);
-                    show_local_db();
-                }
+                        update_sql_row(emergency_node);
+                        show_local_db();
+                    }
+                }    
             }
         }
         //close(emergency_sock);
