@@ -40,10 +40,10 @@
 #define clear() printf("\033[H\033[J")
 
 #define MAX_TIMEOUT     10              // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT    2                   // seconds: recommend 4s
-#define NUM_RETRANS         5           // for commands
-#define NUM_RETRANS_AUTHEN  5           // for authentication
-#define NUM_RETRANS_SET_KEY  5          // for setting application key
+#define TIME_OUT    1                   // seconds: recommend 4s
+#define NUM_RETRANS         1           // for commands
+#define NUM_RETRANS_AUTHEN  1           // for authentication
+#define NUM_RETRANS_SET_KEY  1          // for setting application key
 
 
 static  struct  sockaddr_in6 rev_sin6;

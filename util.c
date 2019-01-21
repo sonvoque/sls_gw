@@ -47,7 +47,6 @@ void phex_64(uint8_t* data_64) { // in chuoi hex 64 bytes
 /*---------------------------------------------------------------------------*/
 // ma hoa 64 bytes
 void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv) { 
-    /*
     uint8_t data_temp[MAX_CMD_LEN];
 
     memcpy(data_temp, data, MAX_CMD_LEN);
@@ -58,21 +57,33 @@ void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* 
 
     //printf("\nData encrypted: \n");
     //phex_64(data_encrypted);
-    */
 }
+
+void scramble_data(uint8_t* data_encrypted, uint8_t* data, uint8_t* key) {
+    int i;
+    for (i=0; i<MAX_CMD_LEN; i++) {
+        data_encrypted[i] = data[i] ^ key[i%4];
+    }
+} 
+
+void descramble_data(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key) {
+    int i;
+    for (i=0; i<MAX_CMD_LEN; i++) {
+        data_decrypted[i] = data_encrypted[i] ^ key[i%4];
+    }
+} 
+
 //-------------------------------------------------------------------------------------------
-void encrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
-    uint8_t payload[MAX_CMD_LEN];
-    printf(" - Encryption AES process ... done \n");
-    memcpy(&payload, cmd, MAX_CMD_LEN);
-    encrypt_cbc((uint8_t *)cmd, payload, key, iv);
+void encrypt_payload(cmd_struct_t *cmd, uint8_t* key) {    
+    printf(" - Encryption process ... done \n");
+    scramble_data((uint8_t *)cmd, (uint8_t *)cmd, key);
+
+    //encrypt_cbc((uint8_t *)cmd, payload, key, iv);
 }
 
 /*---------------------------------------------------------------------------*/
 void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key, uint8_t* iv)  {
-    /*
     uint8_t data_temp[MAX_CMD_LEN];
-
 
     printf("Decrypt Key = ");
     for (int i=0; i<=15; i++) {
@@ -92,14 +103,14 @@ void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key
 
     printf("Data decrypt: \n");
     phex_64(data_decrypted);
-    */
 }
 
 
 //-------------------------------------------------------------------------------------------
 void decrypt_payload(cmd_struct_t *cmd, uint8_t* key) {
-    decrypt_cbc((uint8_t *)cmd, (uint8_t *)cmd, key, iv);
-    printf(" - Decryption AES process ... done \n");
+    //decrypt_cbc((uint8_t *)cmd, (uint8_t *)cmd, key, iv);
+    descramble_data((uint8_t *)cmd, (uint8_t *)cmd, key);
+    printf(" - Decryption process ... done \n");
 }
 
 

@@ -55,3 +55,5 @@ void 	gen_random_key_128(uint8_t* key);
 
 void 	encrypt_cbc(uint8_t* data_encrypted, uint8_t* data,  uint8_t* key,  uint8_t* iv);
 void  	decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted,  uint8_t* key,  uint8_t* iv);
+void 	scramble_data(uint8_t* data_encrypted, uint8_t* data, uint8_t* key);
+void 	descramble_data(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key);
