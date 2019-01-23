@@ -40,10 +40,10 @@
 #define clear() printf("\033[H\033[J")
 
 #define MAX_TIMEOUT     10              // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT    1                   // seconds: recommend 4s
-#define NUM_RETRANS         1           // for commands
-#define NUM_RETRANS_AUTHEN  1           // for authentication
-#define NUM_RETRANS_SET_KEY  1          // for setting application key
+#define TIME_OUT    3                   // seconds: recommend 4s
+#define NUM_RETRANS         5           // for commands
+#define NUM_RETRANS_AUTHEN  5           // for authentication
+#define NUM_RETRANS_SET_KEY 5          // for setting application key
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -178,13 +178,14 @@ void gen_app_key_for_node(int nodeid) {
     gen_random_key_128(byte_array);
     convert_array2str(byte_array,sizeof(byte_array),&result);
     strcpy(node_db_list[nodeid].app_key, result);
-    
+    /*
     printf(" - Key for node %d: ", nodeid);
     for (i = 0; i<16; i++) {
         printf("0x%02X,",byte_array[i]);
     }
     printf("\n");
-    //printf("String key %s\n", node_db_list[nodeid].app_key);
+    */
+    printf(" - Key for node %d: %s \n", nodeid, node_db_list[nodeid].app_key);
 }
 
 /*------------------------------------------------*/
