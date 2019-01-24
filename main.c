@@ -76,7 +76,7 @@ static  char *pi_p;
 static  int node_id, num_of_node, timeout_val;
 
 /*prototype definition */
-static void prepare_cmd();
+static void prepare_cmd(int nodeid);
 static int  read_node_list();
 static void run_node_discovery();
 static bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_res, int *res);
@@ -200,6 +200,7 @@ void init_main() {
     for (i=1;i<num_of_node; i++) {
         gen_app_key_for_node(i);
         node_db_list[i].encryption_phase = FALSE;
+        node_db_list[i].seq = 0;
     }
     printf("\n");
     update_sql_db();
@@ -610,6 +611,8 @@ bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_
     int response;
     uint32_t rx_res, code;
 
+    //prepare_cmd(node_id);
+
     result = false;
     code = challenge_code;
     tx_cmd.type = MSG_TYPE_HELLO;
@@ -700,9 +703,12 @@ void run_node_discovery(){
 
 
 /*------------------------------------------------*/
-void prepare_cmd() {
+void prepare_cmd(int nodeid) {
+    node_db_list[nodeid].seq++;
+
     tx_cmd.sfd = SFD;
-    tx_cmd.seq ++;
+    tx_cmd.seq = node_db_list[nodeid].seq;
+    printf(" - Prepare cmd for node %d, seq =  %d \n", nodeid, tx_cmd.seq);  
 }
 
 
@@ -1469,7 +1475,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
 
     //print_cmd(tx_cmd);
     //printf("ipv6_send: node = %d, ipv6= %s\n",nodeid, dst_ipv6addr);  
-    prepare_cmd();
+    prepare_cmd(nodeid);
     strtok(buffer, "\n");
 
     sock = socket(PF_INET6, SOCK_DGRAM,0);

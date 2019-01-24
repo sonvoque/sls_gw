@@ -78,6 +78,7 @@ struct node_db_struct_t {
 	uint16_t	challenge_code_res;
 	uint8_t		authenticated;
 	uint8_t		encryption_phase;
+	uint8_t		seq;
 };
 
 
