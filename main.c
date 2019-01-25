@@ -383,8 +383,9 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d, num_of_nodes = %d \n", sizeof(node_db_list), 
+    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d (bytes), num_of_nodes = %d \n", sizeof(node_db_list), 
         sizeof(node_db_struct_t), num_of_node);
+    printf("Border router IP: %s \n",node_db_list[0].ipv6_addr);
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
     printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
