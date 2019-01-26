@@ -8,6 +8,8 @@
 | Date: 01/2017                                                     |
 |-------------------------------------------------------------------|
 */
+#include "sls.h"
+
 
 #ifndef SLS_CLI_H_
 #define SLS_CLI_H_
@@ -79,6 +81,7 @@ struct node_db_struct_t {
 	uint8_t		authenticated;
 	uint8_t		encryption_phase;
 	uint8_t		seq;
+	//env_struct_t	env_db;
 };
 
 

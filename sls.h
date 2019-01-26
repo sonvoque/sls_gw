@@ -223,7 +223,6 @@ enum {
 //	used by gateway
 struct gw_struct_t {
 	uint16_t	id;			/*0000xxxx xxxxxxxx */
-	uint16_t	panid;		
 	uint8_t		status;
 	/* data of device */
 	uint16_t	voltage;
@@ -236,7 +235,6 @@ struct gw_struct_t {
 /*---------------------------------------------------------------------------*/
 struct led_struct_t {
 	uint16_t	id;			/*0001xxxx xxxxxxxx */
-	uint16_t  	panid;						
 	uint8_t		status;
 	/* data of device */
 	uint16_t	voltage;
@@ -249,7 +247,6 @@ struct led_struct_t {
 
 struct power_metter {
 	uint16_t	id;			/*0010xxxx xxxxxxxx */
-	uint16_t  	panid;		
 	uint8_t		status;	
 	/* data of device */
 	uint16_t	voltage;
@@ -268,15 +265,15 @@ struct power_metter {
 //	used in the future
 struct env_struct_t {
 	uint16_t	id;			/*0011xxxx xxxxxxxx */
-	uint16_t	panid;		
 	uint8_t		status;
 	/* data of device */
 	uint16_t	temp;
-	uint16_t	humidity;
 	uint16_t	light;
+	uint16_t	pressure;
+	uint16_t	humidity;
 	uint16_t	pir;
 	uint16_t	rain;
-};
+} __attribute__((packed));
 
 /* This data structure is used to store the packet content (payload) */
 struct net_struct_t {
@@ -299,7 +296,7 @@ struct net_struct_t {
 //	sfd[1] 			= 0x7F (Start of Frame Delimitter)
 //	len[1]: 		used for App node_id
 //	seq[2]: 		transaction id;
-//	type[1]: 		REQUEST/REPLY/HELLO
+//	type[1]: 		REQUEST/REPLY/HELLO/ASYNC
 //	cmd[1]:			command id
 //	err_code[2]: 	code returned in REPLY, sender check this field to know the REQ status
 //	arg[54]: 		data payload
@@ -325,20 +322,6 @@ typedef struct cmd_struct_t		cmd_struct_t;
 typedef struct net_struct_t		net_struct_t;
 typedef struct gw_struct_t		gw_struct_t;
 typedef struct led_struct_t		led_struct_t;
-
-//void 		print_cmd_data(cmd_struct_t command);
-/*
-uint16_t 	hash( uint16_t a); 
-void		gen_crc_for_cmd(cmd_struct_t *cmd);
-bool	 	check_crc_for_cmd(cmd_struct_t *cmd);
-uint16_t 	gen_crc16(uint8_t *data_p, unsigned short  length);
-void 		encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv);
-void 		decrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* iv);
-void 		encrypt_payload(cmd_struct_t *cmd, uint8_t* key);
-void 		decrypt_payload(cmd_struct_t *cmd, uint8_t* key);
-void		float2Bytes(float val,uint8_t* bytes_array);
-void 		phex_16(uint8_t* data_16);
-void 		phex_64(uint8_t* data_64);
-*/
+typedef struct env_struct_t		env_struct_t;
 	
 #endif /* SLS_H_ */
