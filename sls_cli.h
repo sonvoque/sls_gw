@@ -78,8 +78,8 @@ struct node_db_struct_t {
 	double		rdr;									//request delivery rate
 	uint16_t	challenge_code;
 	uint16_t	challenge_code_res;
-	uint8_t		authenticated;
-	uint8_t		encryption_phase;
+	bool		authenticated;
+	bool		encryption_phase;
 	uint8_t		seq;
 	//env_struct_t	env_db;
 };
