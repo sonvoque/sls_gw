@@ -52,10 +52,10 @@ Topology description:
 #define clear() printf("\033[H\033[J")
 
 #define MAX_TIMEOUT     10              // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT    4                   // seconds: recommend 4s
-#define NUM_RETRANS         5           // for commands: default = 5
-#define NUM_RETRANS_AUTHEN  5           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY 5          // for setting application key: default = 5
+#define TIME_OUT    2                   // seconds: recommend 4s
+#define NUM_RETRANS         2           // for commands: default = 5
+#define NUM_RETRANS_AUTHEN  2           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY 2          // for setting application key: default = 5
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -207,7 +207,8 @@ void init_main() {
     for (i=1;i<num_of_node; i++) {
         gen_app_key_for_node(i);
         node_db_list[i].encryption_phase = FALSE;
-        node_db_list[i].seq = 0;
+        node_db_list[i].cmd_seq = 0;
+        node_db_list[i].async_seq = 0;
     }
     printf("\n");
     update_sql_db();
@@ -721,10 +722,10 @@ void run_node_discovery(){
 
 /*------------------------------------------------*/
 void prepare_cmd(int nodeid) {
-    node_db_list[nodeid].seq++;
+    node_db_list[nodeid].cmd_seq++;
 
     tx_cmd.sfd = SFD;
-    tx_cmd.seq = node_db_list[nodeid].seq;
+    tx_cmd.seq = node_db_list[nodeid].cmd_seq;
     printf(" - Prepare cmd for node %d, seq =  %d \n", nodeid, tx_cmd.seq);  
 }
 
@@ -1286,9 +1287,11 @@ int main(int argc, char* argv[]) {
                     check_packet_for_node(&emergency_reply, emergency_node, node_db_list[emergency_node].encryption_phase);
 
                    if (emergency_reply.type == MSG_TYPE_ASYNC) {   
-                        printf(" - Got an emergency msg (%d bytes) from node %d [%s]\n", emergency_status, emergency_node, buffer);
-                        //printf("- Emergency type = 0x%02X, err_code = 0x%04X \n", emergency_reply.type, emergency_reply.err_code);
+                        printf(" - Got an emergency msg (%d bytes) from node %d [%s] \n", emergency_status, emergency_node, buffer);
+                        printf("   + Cmd = 0x%02X, type = 0x%02X, seq = %d, \n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq);
                         node_db_list[emergency_node].num_emergency_msg++;
+                        node_db_list[emergency_node].async_seq = emergency_reply.seq;
+
                         memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
                     
                         time(&rawtime );
@@ -1298,7 +1301,7 @@ int main(int argc, char* argv[]) {
                         strcpy(node_db_list[emergency_node].connected,"Y");
 
                         if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
-                            printf(" - Emergency data: %d bytes...\n",MAX_CMD_DATA_LEN);
+                            printf("   + Emergency data: %d bytes...\n",MAX_CMD_DATA_LEN);
                             printf("    [");
                             for (i=0; i<MAX_CMD_DATA_LEN; i++)
                                 printf("%d,",emergency_reply.arg[i]);     
@@ -1310,7 +1313,12 @@ int main(int argc, char* argv[]) {
                             printf("     ++ Temperature = %d.%u (ºC) \n", env_db.temp / 10, env_db.temp % 10 );
                             printf("     ++ Light       = %u (lux) \n", env_db.light);
                             printf("     ++ Pressure    = %u.%u(hPa) \n", env_db.pressure / 10, env_db.pressure % 10);
-                            //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], (uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
+                            //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], 
+                            //              (uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
+
+                            //check duplicate packets here
+                            // update sensor data
+                            node_db_list[emergency_node].sensor = env_db;
                         }
 
                         //send authentication here

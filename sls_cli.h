@@ -80,7 +80,10 @@ struct node_db_struct_t {
 	uint16_t	challenge_code_res;
 	bool		authenticated;
 	bool		encryption_phase;
-	uint8_t		seq;
+	uint16_t	cmd_seq;
+	uint16_t	async_seq;
+
+	env_struct_t	sensor;
 	//env_struct_t	env_db;
 };
 
