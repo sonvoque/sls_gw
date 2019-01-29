@@ -148,7 +148,7 @@ void gen_crc_for_cmd(cmd_struct_t *cmd) {
     memcpy(&byte_arr, cmd, MAX_CMD_LEN-2);
     crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
     cmd->crc = (uint16_t)crc16_check;
-    printf("\n - Generate CRC16... done,  0x%04X \n", crc16_check);
+    printf(" - Generate CRC16... done,  0x%04X \n", crc16_check);
     //for (i=0; i<MAX_CMD_DATA_LEN; i++) {
     //    printf("0x%02X \n", cmd->arg[i]);
     //}
@@ -268,7 +268,3 @@ void gen_random_key_128(unsigned char* key){
     }
     strcpy(key,byte_array); 
 }
-
-
-
-

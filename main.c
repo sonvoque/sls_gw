@@ -51,11 +51,11 @@ Topology description:
 
 #define clear() printf("\033[H\033[J")
 
-#define MAX_TIMEOUT     10              // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT    2                   // seconds: recommend 4s
-#define NUM_RETRANS         2           // for commands: default = 5
-#define NUM_RETRANS_AUTHEN  2           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY 2          // for setting application key: default = 5
+#define MAX_TIMEOUT         10          // seconds for a long chain topology 60 nodes: 10s
+#define TIME_OUT            4           // seconds: recommend 4s
+#define NUM_RETRANS         5           // for commands: default = 5
+#define NUM_RETRANS_AUTHEN  5           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY 5           // for setting application key: default = 5
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -228,7 +228,7 @@ void set_node_app_key (int node_id) {
 
     printf("\n - Set key for node %d, key: ", node_id);
     for (i = 0; i<16; i++) {
-        printf("0x%02X,", byte_array[i]);
+        printf("%02X,", byte_array[i]);
     }
     printf("\n");
 
@@ -257,7 +257,10 @@ void set_node_app_key (int node_id) {
 /*------------------------------------------------*/
 void auto_set_app_key() {
     int res, i, j;
+    
+    printf("\033[1;32m");
     printf("\nIII. AUTO SET APP KEY PROCESS.....\n");
+    printf("\033[0m");
     for (i = 1; i < num_of_node; i++)
         if (is_node_connected(i)) 
             set_node_app_key(i);
@@ -399,21 +402,22 @@ void show_local_db() {
     int i;
     printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d (bytes), num_of_nodes = %d \n", sizeof(node_db_list), 
         sizeof(node_db_struct_t), num_of_node);
-    printf("Border router IP: %s \n",node_db_list[0].ipv6_addr);
+    printf("Border router IP: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
+    printf("\033[0m");
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
-    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | rdr |\n");
-    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) |     |\n");
+    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | ctrl|\n");
+    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) | rdr |\n");
     printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) {
-            printf("| %2d | %24s |%2s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
                 (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
         } else {
-            printf("| %2d | %24s |*%1s/%1d|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
@@ -541,7 +545,7 @@ int read_node_list(){
             }
         fclose(ptr_file);
     }
-    printf("I. READ NODE LIST... DONE. Num of nodes: %d\n",num_of_node);
+    printf("\n\033[1;32mI. READ NODE LIST... DONE. Num of nodes: %d  \033[0m\n",num_of_node);
     show_local_db();
     return 0;
 }
@@ -667,8 +671,9 @@ void run_node_discovery(){
     bool node_authenticated = false;
     uint32_t rx_res;
 
-
+    printf("\033[1;32m");
     printf("II. RUNNING DISCOVERY PROCESS.....\n");
+    printf("\033[0m");
     for (i = 1; i < num_of_node; i++) {
         node_db_list[i].challenge_code = gen_random_num();
         node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
@@ -684,7 +689,7 @@ void run_node_discovery(){
         if (res == -1) {
             printf(" - ERROR: discovery process \n");
         } else if (res == 0)   {
-            printf(" - Node %d [%s] unavailable\n", i, node_db_list[i].ipv6_addr);
+            printf(" - Node %d [\033[1;32m%s\033[0m] unavailable\n", i, node_db_list[i].ipv6_addr);
             sprintf(sql,"UPDATE sls_db SET connected='N' WHERE node_id=%d;", i);
             if (execute_sql_cmd(sql)==0) {
                 //printf("sql_cmd = %s\n", sql);
@@ -711,7 +716,7 @@ void run_node_discovery(){
                 } 
                 add_ipaddr(buf,i);
                 strcpy(node_db_list[i].next_hop_link_addr, buf);
-                printf(" - Node %d [%s] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
+                printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
                 //printf("Next hop IPv6 link addr = %s \n", buf);
             }
         }
@@ -1259,8 +1264,10 @@ int main(int argc, char* argv[]) {
 
 
     // main loop
+    printf("\033[1;32m");
     printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS, and PORT %d for ASYNC MSG\n", SERVICE_PORT, SLS_EMERGENCY_PORT);
     //printf("\n V. GATEWAY WAITING on PORT %d for ASYNC MSG\n", SLS_EMERGENCY_PORT);
+    printf("\033[0m");
     for (;;) {    
         // waiting for EMERGENCY msg
         //printf("1. GATEWAY WAITING on PORT %d for emergency msg\n", SLS_EMERGENCY_PORT);
@@ -1286,13 +1293,9 @@ int main(int argc, char* argv[]) {
                     //check_packet_for_node(&emergency_reply, emergency_node, false);
                     check_packet_for_node(&emergency_reply, emergency_node, node_db_list[emergency_node].encryption_phase);
 
-                   if (emergency_reply.type == MSG_TYPE_ASYNC) {   
-                        printf(" - Got an emergency msg (%d bytes) from node %d [%s] \n", emergency_status, emergency_node, buffer);
-                        printf("   + Cmd = 0x%02X, type = 0x%02X, seq = %d, \n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq);
-                        node_db_list[emergency_node].num_emergency_msg++;
-                        node_db_list[emergency_node].async_seq = emergency_reply.seq;
-
-                        memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
+                    if (emergency_reply.type == MSG_TYPE_ASYNC) {   
+                        printf(" - Got an emergency msg (%d bytes) from node %d [\033[1;32m%s\033[0m] \n", emergency_status, emergency_node, buffer);
+                        printf("   + Cmd = 0x%02X, type = 0x%02X,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
                     
                         time(&rawtime );
                         timeinfo = localtime(&rawtime );
@@ -1301,24 +1304,35 @@ int main(int argc, char* argv[]) {
                         strcpy(node_db_list[emergency_node].connected,"Y");
 
                         if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
-                            printf("   + Emergency data: %d bytes...\n",MAX_CMD_DATA_LEN);
-                            printf("    [");
+                            printf("   + Emergency data: %d bytes ...[",MAX_CMD_DATA_LEN);
                             for (i=0; i<MAX_CMD_DATA_LEN; i++)
-                                printf("%d,",emergency_reply.arg[i]);     
+                                printf("%02X",emergency_reply.arg[i]);     
                             printf("]\n");
 
                             // extract sensor data
-                            printf("   + Extract data \n");
-                            memcpy(&env_db, node_db_list[emergency_node].last_emergency_msg, sizeof(env_db));
-                            printf("     ++ Temperature = %d.%u (ºC) \n", env_db.temp / 10, env_db.temp % 10 );
-                            printf("     ++ Light       = %u (lux) \n", env_db.light);
-                            printf("     ++ Pressure    = %u.%u(hPa) \n", env_db.pressure / 10, env_db.pressure % 10);
-                            //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], 
+                            if (node_db_list[emergency_node].async_seq >= emergency_reply.seq){
+                                printf("   + Duplicate async packet: last_seq = %d, curr_seq = %d \n",node_db_list[emergency_node].async_seq,
+                                            emergency_reply.seq);
+                            }
+                            if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {
+                                printf("   + New async packet, extract data: \n");
+                                memcpy(&env_db, node_db_list[emergency_node].last_emergency_msg, sizeof(env_db));
+                                printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
+                                printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
+                                printf("     ++ Pressure    = \033[1;35m %u.%u(hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
+                                //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], 
                             //              (uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
 
-                            //check duplicate packets here
-                            // update sensor data
-                            node_db_list[emergency_node].sensor = env_db;
+                                //check duplicate packets here
+                                // update sensor data
+
+                                printf("   + Update new async packet to DB \n");
+                                node_db_list[emergency_node].num_emergency_msg++;
+                                memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
+
+                                node_db_list[emergency_node].sensor = env_db;
+                                node_db_list[emergency_node].async_seq = emergency_reply.seq;
+                            }
                         }
 
                         //send authentication here
@@ -1340,7 +1354,7 @@ int main(int argc, char* argv[]) {
                             if (res == -1) {
                                 printf(" - ERROR: authetication process \n");
                             } else if (res == 0)   {
-                                printf(" - Node %d [%s] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
+                                printf(" - Node %d [\033[1;32m%s\033[0m] unavailable\n", i, node_db_list[emergency_node].ipv6_addr);
                             } else{
                                 if (node_authenticated==TRUE) {
                                     node_db_list[emergency_node].authenticated = TRUE;
@@ -1373,7 +1387,7 @@ int main(int argc, char* argv[]) {
             }
         }
         //close(emergency_sock);
-        sleep(1);        
+        //sleep(1);        
 
 
         // waiting for command from software
@@ -1450,7 +1464,10 @@ int main(int argc, char* argv[]) {
                 //    perror("sendto");
 
                 show_local_db();
+            
+                printf("\033[1;32m");
                 printf("\nIV. GATEWAY WAITING on PORT %d for COMMANDS, and PORT %d for ASYNC MSG\n", SERVICE_PORT, SLS_EMERGENCY_PORT);
+                printf("\033[0m");
             }
         }
         
@@ -1489,7 +1506,7 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 
     printf(" - Check packet for node %d, key = [", nodeid);
     for (i = 0; i<16; i++) {
-        printf("0x%02X ",key_arr[i]);
+        printf("%02X ",key_arr[i]);
     }
     printf("]\n");
 
@@ -1557,9 +1574,9 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
 
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
-            printf("\n2. Forward REQUEST (%d bytes) to [%s]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
+            printf("\n2. Forward REQUEST (%d bytes) to [\033[1;32m%s\033[0m]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
         } else {
-            printf("\n2. Forward REQUEST to [%s]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
+            printf("\n2. Forward REQUEST to [\033[1;32m%s\033[0m]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
         }    
 
         /*wait for a reply */

@@ -84,7 +84,6 @@ struct node_db_struct_t {
 	uint16_t	async_seq;
 
 	env_struct_t	sensor;
-	//env_struct_t	env_db;
 };
 
 
