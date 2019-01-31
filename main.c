@@ -129,7 +129,7 @@ static void gen_app_key_for_node(int nodeid);
 
 static void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en);
 static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encryption_en);
-
+static void reset_sequence(int nodeid);
 
 struct timeval t0;
 struct timeval t1;
@@ -205,10 +205,9 @@ void init_main() {
 
     printf("\n - GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n", num_of_node );
     for (i=1;i<num_of_node; i++) {
-        gen_app_key_for_node(i);
+        gen_app_key_for_node(i);        
+        reset_sequence(i);        
         node_db_list[i].encryption_phase = FALSE;
-        node_db_list[i].cmd_seq = 0;
-        node_db_list[i].async_seq = 0;
     }
     printf("\n");
     update_sql_db();
@@ -226,11 +225,11 @@ void set_node_app_key (int node_id) {
     tx_cmd.err_code = 0;
     convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
 
-    printf("\n - Set key for node %d, key: ", node_id);
+    printf("\n - Set key for node %d, key: [", node_id);
     for (i = 0; i<16; i++) {
         printf("%02X,", byte_array[i]);
     }
-    printf("\n");
+    printf("]\n");
 
 
     for (j = 0; j<16; j++) {
@@ -404,28 +403,28 @@ void show_local_db() {
         sizeof(node_db_struct_t), num_of_node);
     printf("Border router IP: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
     printf("\033[0m");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
-    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger|err_code| next | delay | ctrl|\n");
-    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|gency|  (hex) |  hop |  (ms) | rdr |\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
+    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger_cnt |err_code| next | delay | ctrl|\n");
+    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|  /seq    |  (hex) |  hop |  (ms) | rdr |\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) {
-            printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
+                node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
                 (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
         } else {
-            printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%5d| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                node_db_list[i].num_emergency_msg, node_db_list[i].last_err_code,
+                node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
                 (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t) node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr);
         }    
     }
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|-----|--------|------|-------|-----|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
 }
 
 
@@ -622,6 +621,10 @@ static char * add_ipaddr(char *buf, int nodeid) {
     return p;
 }
 
+static void reset_sequence(int nodeid){
+        node_db_list[nodeid].async_seq = 0;
+        node_db_list[nodeid].cmd_seq = 0;
+}
 
 
 /*------------------------------------------------*/
@@ -631,6 +634,7 @@ bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_
     uint32_t rx_res, code;
 
     //prepare_cmd(node_id);
+    reset_sequence(node_id);
 
     result = false;
     code = challenge_code;
@@ -1205,8 +1209,8 @@ int main(int argc, char* argv[]) {
     uint16_t rssi_rx, old_seq;
     char buf[100];
     bool node_authenticated = false;
-    uint32_t rx_res;
-
+    uint32_t rx_res, temp;
+    uint8_t H, L;
 
 
     clear();
@@ -1319,7 +1323,13 @@ int main(int argc, char* argv[]) {
                                 memcpy(&env_db, node_db_list[emergency_node].last_emergency_msg, sizeof(env_db));
                                 printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
                                 printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
-                                printf("     ++ Pressure    = \033[1;35m %u.%u(hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
+                                printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
+                                
+                                H = (uint8_t)(env_db.humidity >> 8);
+                                L = (uint8_t)(env_db.humidity & 0xFF);
+                                temp = ((uint32_t)H << 8) + (L & 0xFC);
+                                temp = (((temp) * 15625L) >> 13) - 6000;
+                                printf("     ++ Humidity    = \033[1;35m %u.%u (RH)\033[0m\n", temp/1000, temp % 1000);
                                 //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], 
                             //              (uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
 
@@ -1339,6 +1349,9 @@ int main(int argc, char* argv[]) {
                         if (emergency_reply.cmd == ASYNC_MSG_JOINED) {
                         //if (node_db_list[emergency_node].authenticated==FALSE) {
                             node_db_list[emergency_node].encryption_phase = FALSE;
+                            node_db_list[emergency_node].async_seq = 0;
+
+
                             printf(" - Node %d want to join network \n",emergency_node);
                             node_db_list[emergency_node].challenge_code = gen_random_num();
                             node_db_list[emergency_node].challenge_code_res = hash(node_db_list[emergency_node].challenge_code);
