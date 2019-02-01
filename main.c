@@ -54,8 +54,8 @@ Topology description:
 #define MAX_TIMEOUT         10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT            4           // seconds: recommend 4s
 #define NUM_RETRANS         5           // for commands: default = 5
-#define NUM_RETRANS_AUTHEN  5           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY 5           // for setting application key: default = 5
+#define NUM_RETRANS_AUTHEN  3           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY 3           // for setting application key: default = 5
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -130,6 +130,7 @@ static void gen_app_key_for_node(int nodeid);
 static void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en);
 static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encryption_en);
 static void reset_sequence(int nodeid);
+static void update_sensor_data(int nodeid, env_struct_t env_db);
 
 struct timeval t0;
 struct timeval t1;
@@ -1183,6 +1184,35 @@ static void run_reload_gw_fw(){
     show_local_db();    
 }
 
+
+//-------------------------------------------------------------------------------------------
+static void update_sensor_data(int nodeid, env_struct_t env_db){
+    uint8_t H, L;
+    uint32_t temp;
+
+    node_db_list[nodeid].sensor_db.temperature = (float) env_db.temp;
+    node_db_list[nodeid].sensor_db.temperature = node_db_list[nodeid].sensor_db.temperature /10;
+
+    node_db_list[nodeid].sensor_db.pressure = (float) env_db.pressure;
+    node_db_list[nodeid].sensor_db.pressure = node_db_list[nodeid].sensor_db.pressure /10;
+
+    node_db_list[nodeid].sensor_db.light = (float) env_db.light;
+
+    H = (uint8_t)(env_db.humidity >> 8);
+    L = (uint8_t)(env_db.humidity & 0xFF);
+    temp = ((uint32_t)H << 8) + (L & 0xFC);
+    temp = (((temp) * 15625L) >> 13) - 6000;
+
+    node_db_list[nodeid].sensor_db.humidity = (float)(temp*1.0);
+    node_db_list[nodeid].sensor_db.humidity = node_db_list[nodeid].sensor_db.humidity/1000;
+
+    printf("   + New async packet, extract data and update DB: \n");
+    printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
+    printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
+    printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
+    printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+}
+
 //-------------------------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
     int res, i, j, result;
@@ -1318,30 +1348,26 @@ int main(int argc, char* argv[]) {
                                 printf("   + Duplicate async packet: last_seq = %d, curr_seq = %d \n",node_db_list[emergency_node].async_seq,
                                             emergency_reply.seq);
                             }
-                            if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {
-                                printf("   + New async packet, extract data: \n");
-                                memcpy(&env_db, node_db_list[emergency_node].last_emergency_msg, sizeof(env_db));
-                                printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
-                                printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
-                                printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
-                                
-                                H = (uint8_t)(env_db.humidity >> 8);
-                                L = (uint8_t)(env_db.humidity & 0xFF);
-                                temp = ((uint32_t)H << 8) + (L & 0xFC);
-                                temp = (((temp) * 15625L) >> 13) - 6000;
-                                printf("     ++ Humidity    = \033[1;35m %u.%u (RH)\033[0m\n", temp/1000, temp % 1000);
-                                //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14], 
-                            //              (uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
+                            if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
+                                memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
-                                //check duplicate packets here
+                                //printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
+                                //printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
+                                //printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
+                                //H = (uint8_t)(env_db.humidity >> 8);
+                                //L = (uint8_t)(env_db.humidity & 0xFF);
+                                //temp = ((uint32_t)H << 8) + (L & 0xFC);
+                                //temp = (((temp) * 15625L) >> 13) - 6000;
+                                //printf("     ++ Humidity    = \033[1;35m %u.%u (RH)\033[0m\n", temp/1000, temp % 1000);
+                                //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14],(uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
+
                                 // update sensor data
+                                update_sensor_data(emergency_node, env_db);
 
-                                printf("   + Update new async packet to DB \n");
-                                node_db_list[emergency_node].num_emergency_msg++;
-                                memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
-
+                                node_db_list[emergency_node].num_emergency_msg++;                                
                                 node_db_list[emergency_node].sensor = env_db;
                                 node_db_list[emergency_node].async_seq = emergency_reply.seq;
+                                memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
                             }
                         }
 

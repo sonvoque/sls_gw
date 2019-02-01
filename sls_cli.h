@@ -51,6 +51,17 @@
 
 typedef enum {false=0, true=1} bool;
 
+struct sensor_data_t {
+	float		temperature;
+	float		light;
+	float		pressure;
+	float		humidity;
+	float 		pir;
+	float 		rain;
+};
+
+typedef struct sensor_data_t		sensor_data_t;
+
 struct node_db_struct_t {
 	uint8_t 	index;
 	uint16_t	id;			/*0001xxxx xxxxxxxx */
@@ -84,6 +95,7 @@ struct node_db_struct_t {
 	uint16_t	async_seq;
 
 	env_struct_t	sensor;
+	sensor_data_t	sensor_db;
 };
 
 
