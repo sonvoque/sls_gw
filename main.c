@@ -51,11 +51,11 @@ Topology description:
 
 #define clear() printf("\033[H\033[J")
 
-#define MAX_TIMEOUT         10          // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT            4           // seconds: recommend 4s
-#define NUM_RETRANS_AUTHEN  3           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY 3           // for setting application key: default = 5
-#define NUM_RETRANS         5           // for commands: default = 5
+#define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
+#define TIME_OUT                4           // seconds: recommend 4s
+#define NUM_RETRANS_AUTHEN      3           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     3           // for setting application key: default = 5
+#define NUM_RETRANS             5           // for commands: default = 5
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -638,7 +638,7 @@ bool authenticate_node(int node_id, uint32_t challenge_code, uint16_t challenge_
     //response = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANS_AUTHEN, false);
     response = ip6_send_cmd(node_id, SLS_NORMAL_PORT, NUM_RETRANS_AUTHEN, node_db_list[node_id].encryption_phase);
     if (response == -1) {
-        printf(" - ERROR: authetication node %d \n", node_id);
+        printf(" - ERROR: autheticating node %d \n", node_id);
     }
     else if (response == 0)   {
     }
@@ -1279,6 +1279,7 @@ int main(int argc, char* argv[]) {
     emergency_status = bind(emergency_sock, (struct sockaddr *)&sin6, sin6len);
     if (-1 == emergency_status)
         perror("bind"), exit(1);
+
     emergency_status = getsockname(emergency_sock, (struct sockaddr *)&sin6, &sin6len);
     //printf("Gateway emergency_sock port for emergency: %d\n", ntohs(sin6.sin6_port));
 
@@ -1422,9 +1423,11 @@ int main(int argc, char* argv[]) {
         fd.events = POLLIN;
         res = poll(&fd, 1, timeout*1000);   
         if (res>0) {
-            connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //for TCP
-            if (connfd >= 0)
-                printf("Accept TCP connection....\n");
+            //connfd = accept(pi_fd, (struct sockaddr*)NULL, NULL);   //for TCP
+            connfd = accept(pi_fd, (struct sockaddr*)&pi_remaddr, &pi_addrlen);   //for TCP
+            if (connfd >= 0) {
+                printf("\n Accept TCP connection from: [\033[1;32m%s\033[0m]:%d \n", inet_ntoa(pi_remaddr.sin_addr), ntohs(pi_remaddr.sin_port));            
+            }
         }
             
         // read data from client
@@ -1521,7 +1524,7 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
 
     tx_cmd.crc = 0;
-    gen_crc_for_cmd(cmd);
+    //gen_crc_for_cmd(cmd);
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
@@ -1546,7 +1549,8 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
     }
 
     printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
-    return check_crc_for_cmd(cmd);
+    //return check_crc_for_cmd(cmd);
+    return true;
 }
 
 //-------------------------------------------------------------------------------------------
