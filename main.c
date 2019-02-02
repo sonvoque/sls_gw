@@ -47,15 +47,15 @@ Topology description:
 
 #define BUFSIZE 2048
 #define MAXBUF  sizeof(cmd_struct_t)
-#define SERVICE_PORT	21234	/* hard-coded port number */
+#define SERVICE_PORT	21234	         /* hard-coded port number */
 
 #define clear() printf("\033[H\033[J")
 
 #define MAX_TIMEOUT         10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT            4           // seconds: recommend 4s
-#define NUM_RETRANS         5           // for commands: default = 5
 #define NUM_RETRANS_AUTHEN  3           // for authentication; default = 5
 #define NUM_RETRANS_SET_KEY 3           // for setting application key: default = 5
+#define NUM_RETRANS         5           // for commands: default = 5
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -132,8 +132,7 @@ static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encr
 static void reset_sequence(int nodeid);
 static void update_sensor_data(int nodeid, env_struct_t env_db);
 
-struct timeval t0;
-struct timeval t1;
+struct timeval t0, t1;
 
 time_t rawtime;
 struct tm *timeinfo;
@@ -160,26 +159,16 @@ void finish_with_error(MYSQL *con) {
 /*------------------------------------------------*/
 void get_db_row(MYSQL_ROW row, int i) {
 #ifdef USING_SQL_SERVER    
-    
     /* if border router: always connected */
     if (i==0) {
         strcpy(node_db_list[i].connected,"Y");
-    }    
-    
+    }        
+
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
-    //strcpy(node_db_list[i].connected,row[3]);
-    //node_db_list[i].num_req     = atoi(row[4]);
-    //node_db_list[i].num_rep     = atoi(row[5]);
-    //node_db_list[i].num_timeout = atoi(row[6]);
-    //node_db_list[i].last_cmd    = atoi(row[7]);
-    //strcpy(node_db_list[i].last_seen,row[8]);        
-    //node_db_list[i].num_of_retrans = atoi(row[9]);
     strcpy(node_db_list[i].app_key,row[15]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
-    //printf("%02d | %02d | %s | %s | %02d | %02d | %02d | %02d | \n",nodedb->index , nodedb->id,nodedb->ipv6_addr, 
-    //    nodedb->connected, nodedb->rx_cmd, nodedb->tx_rep,nodedb->num_timeout, nodedb->last_cmd );
 #endif
 }
 
@@ -193,19 +182,19 @@ void gen_app_key_for_node(int nodeid) {
     gen_random_key_128(byte_array);
     convert_array2str(byte_array,sizeof(byte_array),&result);
     strcpy(node_db_list[nodeid].app_key, result);
-    printf(" - Key for node %d: %s \n", nodeid, node_db_list[nodeid].app_key);
+    printf(" - Key for node %2d: \033[1;32m %s \033[0m\n", nodeid, node_db_list[nodeid].app_key);
 }
 
 /*------------------------------------------------*/
 void init_main() {
     int i;
+
     timeout_val = TIME_OUT;
     strcpy(node_db_list[0].connected,"Y");
     node_db_list[0].authenticated = TRUE;
 
-
     printf("\n - GENERATE RANDOM KEYS (128 bits) FOR %d NODE(S) \n", num_of_node );
-    for (i=1;i<num_of_node; i++) {
+    for (i=1; i<num_of_node; i++) {
         gen_app_key_for_node(i);        
         reset_sequence(i);        
         node_db_list[i].encryption_phase = FALSE;
@@ -226,7 +215,7 @@ void set_node_app_key (int node_id) {
     tx_cmd.err_code = 0;
     convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
 
-    printf("\n - Set key for node %d, key: [", node_id);
+    printf("\n - Set key for node %d, key = [", node_id);
     for (i = 0; i<16; i++) {
         printf("%02X,", byte_array[i]);
     }
@@ -246,10 +235,10 @@ void set_node_app_key (int node_id) {
     if (res == -1) {
         printf(" - ERROR: set_node_app_key process \n");
     } else if (res == 0) {
-        printf(" - Set App Key for node %d [%s] failed \n", node_id, node_db_list[node_id].ipv6_addr); 
+        printf(" - Set App Key for node %d [\033[1;32m%s\033[0m] failed \n", node_id, node_db_list[node_id].ipv6_addr); 
     } else { 
         //node_db_list[node_id].encryption_phase = TRUE;
-        printf(" - Set App Key for node %d [%s] successful, encryption_phase = %d \n", node_id, node_db_list[node_id].ipv6_addr, 
+        printf(" - Set App Key for node %d [\033[1;32m%s\033[0m] successful, encryption_phase = %d \n", node_id, node_db_list[node_id].ipv6_addr, 
                                                                                     node_db_list[node_id].encryption_phase);   
     }
 }
@@ -721,8 +710,7 @@ void run_node_discovery(){
                 } 
                 add_ipaddr(buf,i);
                 strcpy(node_db_list[i].next_hop_link_addr, buf);
-                printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
-                //printf("Next hop IPv6 link addr = %s \n", buf);
+                printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link-addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
             }
         }
     }
@@ -733,10 +721,9 @@ void run_node_discovery(){
 /*------------------------------------------------*/
 void prepare_cmd(int nodeid) {
     node_db_list[nodeid].cmd_seq++;
-
     tx_cmd.sfd = SFD;
     tx_cmd.seq = node_db_list[nodeid].cmd_seq;
-    printf(" - Prepare cmd for node %d, seq =  %d \n", nodeid, tx_cmd.seq);  
+    printf(" - Prepare cmd for node %d, seq = %d \n", nodeid, tx_cmd.seq);  
 }
 
 
@@ -1179,7 +1166,6 @@ static void run_reload_gw_fw(){
 #ifdef AUTO_SET_APP_KEY
     auto_set_app_key();
 #endif
-    //run_node_authentication();
     update_sql_db();
     show_local_db();    
 }
@@ -1247,7 +1233,7 @@ int main(int argc, char* argv[]) {
 	/* create a UDP socket */
     //if ((pi_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 	if ((pi_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("cannot create socket\n");
+		perror("ERROR: cannot create socket\n");
 		//return 0;
 	}
     setsockopt(pi_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
@@ -1259,7 +1245,7 @@ int main(int argc, char* argv[]) {
 	pi_myaddr.sin_port = htons(SERVICE_PORT);
 
 	if (bind(pi_fd, (struct sockaddr *)&pi_myaddr, sizeof(pi_myaddr)) < 0) {
-		perror("bind failed");
+		perror("ERROR: bind failed");
 		return 0;
 	}
     
@@ -1270,7 +1256,7 @@ int main(int argc, char* argv[]) {
     init_main();
 
 
-    /* should wait approximately 5-7s here for a 60-node chain topology */
+    /* should wait approximately 5-10s here for a 60-node chain topology */
     /* running discovery */
     run_node_discovery();
 
@@ -1351,13 +1337,13 @@ int main(int argc, char* argv[]) {
                             if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
                                 memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
-                                //printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
-                                //printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
-                                //printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
                                 //H = (uint8_t)(env_db.humidity >> 8);
                                 //L = (uint8_t)(env_db.humidity & 0xFF);
                                 //temp = ((uint32_t)H << 8) + (L & 0xFC);
                                 //temp = (((temp) * 15625L) >> 13) - 6000;
+                                //printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
+                                //printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
+                                //printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
                                 //printf("     ++ Humidity    = \033[1;35m %u.%u (RH)\033[0m\n", temp/1000, temp % 1000);
                                 //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14],(uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
 
@@ -1388,7 +1374,7 @@ int main(int argc, char* argv[]) {
                             node_authenticated = authenticate_node(emergency_node, node_db_list[emergency_node].challenge_code, node_db_list[emergency_node].challenge_code_res, &res);
                             gettimeofday(&t1, 0);
                             node_db_list[emergency_node].delay = timedifference_msec(t0, t1);
-                            printf(" - Roundtrip delay %.2f (ms)\n", node_db_list[emergency_node].delay);
+                            printf(" - Roundtrip delay:\033[1;32m %.2f\033[0m (ms)\n", node_db_list[emergency_node].delay);
 
                             if (res == -1) {
                                 printf(" - ERROR: authetication process \n");
@@ -1413,7 +1399,7 @@ int main(int argc, char* argv[]) {
                                     } 
                                     add_ipaddr(buf,emergency_node);
                                     strcpy(node_db_list[emergency_node].next_hop_link_addr, buf);
-                                    printf(" - Node %d [%s] available, next-hop link addr = %s\n", emergency_node, node_db_list[emergency_node].ipv6_addr, node_db_list[emergency_node].next_hop_link_addr);
+                                    printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link-addr =\033[1;32m %s \033[0m \n", emergency_node, node_db_list[emergency_node].ipv6_addr, node_db_list[emergency_node].next_hop_link_addr);
                                     set_node_app_key(emergency_node);
                                 }
                             }
@@ -1426,14 +1412,12 @@ int main(int argc, char* argv[]) {
             }
         }
         //close(emergency_sock);
-        //sleep(1);        
 
 
-        // waiting for command from software
-        // for UDP    
+        // waiting for command from software, for UDP    
         //pi_recvlen = recvfrom(pi_fd, pi_buf, BUFSIZE, 0, (struct sockaddr *)&pi_remaddr, &pi_addrlen);
 
-        //printf("\n2. GATEWAY WAITING on PORT %d for COMMANDS\n", SERVICE_PORT);
+        // Wait for ASYNC msg here
         fd.fd = pi_fd;
         fd.events = POLLIN;
         res = poll(&fd, 1, timeout*1000);   
@@ -1460,7 +1444,9 @@ int main(int argc, char* argv[]) {
                 old_seq = pi_cmdPtr->seq;
                 rx_reply = *pi_cmdPtr;
 
+                // get beginning time
                 gettimeofday(&t0, 0);
+
                 if (is_cmd_of_gw(*pi_cmdPtr)==true) {
                     printf(" - Command Analysis: received GW command, cmdID=0x%02X, seq=0x%04X \n", pi_cmdPtr->cmd, pi_cmdPtr->seq);
                     process_gw_cmd(*pi_cmdPtr, node_id);
@@ -1497,10 +1483,15 @@ int main(int argc, char* argv[]) {
                 // update corresponding sequence
                 rx_reply.seq = old_seq;
                 //sprintf(pi_buf, "ACK %d", pi_msgcnt++);
-                printf("4. Sending RESPONE to user ACK-%d, seq = 0x%04X \n", pi_msgcnt++, old_seq);
-                write(connfd, &rx_reply, sizeof(rx_reply)); //TCP
-                //if (sendto(pi_fd, &rx_reply, sizeof(rx_reply), 0, (struct sockaddr *)&pi_remaddr, pi_addrlen) < 0)
-                //    perror("sendto");
+                printf("4. Sending RESPONE to user ACK-%d, seq = 0x%04X, ", pi_msgcnt++, old_seq);
+                res = write(connfd, &rx_reply, sizeof(rx_reply));     // for TCP
+                if (res == -1) {
+                    printf(" - ERROR: reply to GW \n");
+                } else if (res == 0) {
+                    printf(" ... failed \n");
+                } else {
+                    printf("%d (bytes)... successful \n", res);                    
+                }
 
                 show_local_db();
             
@@ -1511,8 +1502,9 @@ int main(int argc, char* argv[]) {
         }
         
         close(connfd);
-        sleep(1);   
+        sleep(1);       // for other threads process
 	}
+
     return 0;
 }
 
@@ -1598,9 +1590,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     sainfo.ai_protocol = IPPROTO_UDP;
     status = getaddrinfo(dst_ipv6addr, str_port, &sainfo, &psinfo);
 
-
     num_of_retrans = 0;
-    //printf("NUMBER OF RETRIALS = %d \n", retrans);        
     while (num_of_retrans < retrans) {
         gettimeofday(&t0, 0);
 
@@ -1654,7 +1644,6 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
                 rx_reply = *cmdPtr;
 
                 //print_cmd(rx_reply);
-                //check_packet_for_node(&rx_reply, nodeid, encryption_en);    
                 check_packet_for_node(&rx_reply, nodeid, encryption_en);    
 
                 strcpy(node_db_list[nodeid].connected,"Y");
