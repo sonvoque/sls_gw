@@ -3,9 +3,9 @@
 | HCMC University of Technology                                     |
 | Telecommunications Departments                                    |
 | Command Line Interface for Smart Lighting System (SLS)            |
-| Version: 1.0                                                      |
+| Version: 2.0                                                      |
 | Author: sonvq@hcmut.edu.vn                                        |
-| Date: 01/2017                                                     |
+| Date: 01/2019                                                     |
 |-------------------------------------------------------------------|
 */
 #include "sls.h"

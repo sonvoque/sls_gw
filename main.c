@@ -3,9 +3,9 @@
 | HCMC University of Technology                                     |
 | Telecommunications Departments                                    |
 | Gateway software for controlling the SLS                          |
-| Version: 1.0                                                      |
+| Version: 2.0                                                      |
 | Author: sonvq@hcmut.edu.vn                                        |
-| Date: 01/2017                                                     |
+| Date: 01/2019                                                     |
 | - Support DB using MySQL                                          |
 | - Discovery service                                               |                   |
 | - compile: gcc -o main main.c $(mysql_config --libs --cflags)     |
@@ -53,7 +53,7 @@ Topology description:
 
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                4           // seconds: recommend 4s
-#define NUM_RETRANS_AUTHEN      3           // for authentication; default = 5
+#define NUM_RETRANS_AUTHEN      3          // for authentication; default = 5
 #define NUM_RETRANS_SET_KEY     3           // for setting application key: default = 5
 #define NUM_RETRANS             5           // for commands: default = 5
 
@@ -111,6 +111,7 @@ static void update2_sql_db();
 static void update_sql_db();
 static void update1_sql_row(int nodeid);
 static void update2_sql_row(int nodeid);
+static void update3_sql_row(int nodeid);
 static void update_sql_row(int nodeid);
 
 static int  execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
@@ -299,12 +300,12 @@ void update2_sql_row(int nodeid) {
     int i;
 
     if (is_node_connected(nodeid)) {
-        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
-                node_db_list[nodeid].next_hop_link_addr, node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
+        sprintf(sql,"UPDATE sls_db SET connected='Y', next_hop_link_addr='%s',delay=%.2f,rdr=%.2f, authenticated=%d  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr, node_db_list[nodeid].delay, node_db_list[nodeid].rdr, node_db_list[nodeid].authenticated,
                 nodeid);
     } else {
-        sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s',delay=%f,rdr=%f  WHERE node_id=%d;", 
-                node_db_list[nodeid].next_hop_link_addr,node_db_list[nodeid].delay, node_db_list[nodeid].rdr,
+        sprintf(sql,"UPDATE sls_db SET connected='N', next_hop_link_addr='%s',delay=%.2f,rdr=%.2f, authenticated=%d  WHERE node_id=%d;", 
+                node_db_list[nodeid].next_hop_link_addr,node_db_list[nodeid].delay, node_db_list[nodeid].rdr, node_db_list[nodeid].authenticated,
                 nodeid);
     }    
     
@@ -316,9 +317,34 @@ void update2_sql_row(int nodeid) {
 }
 
 /*------------------------------------------------*/
+void update3_sql_row(int nodeid) {
+#ifdef USING_SQL_SERVER    
+    char sql[400];
+    int i;
+
+    if (is_node_connected(nodeid)) {
+        sprintf(sql,"UPDATE sls_db SET connected='Y', temperature=%.1f,light=%.0f, pressure=%.1f,humidity=%.2f  WHERE node_id=%d;", 
+                node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light, node_db_list[nodeid].sensor_db.pressure,
+                node_db_list[nodeid].sensor_db.humidity, nodeid);
+    } else {
+        sprintf(sql,"UPDATE sls_db SET connected='N', temperature=%.1f,light=%.0f, pressure=%.1f,humidity=%.2f  WHERE node_id=%d;", 
+                node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light, node_db_list[nodeid].sensor_db.pressure,
+                node_db_list[nodeid].sensor_db.humidity, nodeid);
+    }    
+    
+    if (execute_sql_cmd(sql)==0){
+        //printf("sql_cmd = %s\n", sql);
+    }    
+    //free(result);    
+    //printf("UPDATE SENSOR DATA TO DB....SUCCESSFUL");
+#endif    
+}
+
+/*------------------------------------------------*/
 void update_sql_row(int nodeid) {
     update1_sql_row(nodeid);
     update2_sql_row(nodeid);
+    update3_sql_row(nodeid);
 }
 
 /*------------------------------------------------*/
@@ -393,28 +419,30 @@ void show_local_db() {
         sizeof(node_db_struct_t), num_of_node);
     printf("Border router IP: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
     printf("\033[0m");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
-    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger_cnt |err_code| next | delay | ctrl|\n");
-    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|  /seq    |  (hex) |  hop |  (ms) | rdr |\n");
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
+    printf("|node|       ipv6 address       |con/| req | rep.|time | last|retr.|    last_seen      |chan |RSSI/LQI/power|emger_cnt |err_code| next | delay | ctrl|tempera_|light|pressure|humid|\n");
+    printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|  /seq    |  (hex) |  hop |  (ms) | rdr |ture(ºC)|(lux)| (hPa)  | (RH)|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
     for(i = 0; i < num_of_node; i++) {
         if (i>0) {
-            printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
-                (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
+                (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr,
+                node_db_list[i].sensor_db.temperature, (uint16_t)node_db_list[i].sensor_db.light, node_db_list[i].sensor_db.pressure, node_db_list[i].sensor_db.humidity);  
         } else {
-            printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+            printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                 node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                 node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                 node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                 node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
-                (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t) node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr);
+                (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t) node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr,
+                node_db_list[i].sensor_db.temperature, (uint16_t)node_db_list[i].sensor_db.light, node_db_list[i].sensor_db.pressure, node_db_list[i].sensor_db.humidity);
         }    
     }
-    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|\n");
+    printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
 }
 
 
@@ -560,7 +588,11 @@ bool is_node_valid(int node) {
 
 /*------------------------------------------------*/
 bool is_node_connected(int node) {
-    return (char)node_db_list[node].connected[0]=='Y';
+    if (node >0) {
+        return (char)node_db_list[node].connected[0]=='Y';
+    }else { // border router 
+        return true;
+    }
 }
 
 /*------------------------------------------------*/

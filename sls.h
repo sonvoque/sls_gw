@@ -3,9 +3,9 @@
 | HCMC University of Technology                                     |
 | Telecommunications Departments                                    |
 | Wireless Embedded Firmware for Smart Lighting System (SLS)        |
-| Version: 1.0                                                      |
+| Version: 2.0                                                      |
 | Author: sonvq@hcmut.edu.vn                                        |
-| Date: 01/2017                                                     |
+| Date: 01/2019                                                     |
 | HW support in ISM band: TelosB, CC2538, CC2530, CC1310, z1        |
 |-------------------------------------------------------------------|*/
 
@@ -297,7 +297,7 @@ struct net_struct_t {
 //	len[1]: 		used for App node_id
 //	seq[2]: 		transaction id;
 //	type[1]: 		REQUEST/REPLY/HELLO/ASYNC
-//	cmd[1]:			command id
+//	cmd[1]:			command id: which command excecuted at node
 //	err_code[2]: 	code returned in REPLY, sender check this field to know the REQ status
 //	arg[54]: 		data payload
 //	crc[2]			CRC check
