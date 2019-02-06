@@ -53,8 +53,8 @@ Topology description:
 
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                4           // seconds: recommend 4s
-#define NUM_RETRANS_AUTHEN      3          // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY     3           // for setting application key: default = 5
+#define NUM_RETRANS_AUTHEN      5          // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     5           // for setting application key: default = 5
 #define NUM_RETRANS             5           // for commands: default = 5
 #define SHOW_FULL_DB            FALSE
 
@@ -801,7 +801,7 @@ void prepare_cmd(int nodeid) {
     node_db_list[nodeid].cmd_seq++;
     tx_cmd.sfd = SFD;
     tx_cmd.seq = node_db_list[nodeid].cmd_seq;
-    printf(" - Prepare cmd for node %d, seq = %d \n", nodeid, tx_cmd.seq);  
+    printf("\n2. Prepare cmd for node %d, seq = %d \n", nodeid, tx_cmd.seq);  
 }
 
 
@@ -1381,7 +1381,7 @@ int main(int argc, char* argv[]) {
                 cmdPtr = (cmd_struct_t *)p;
                 emergency_reply = *cmdPtr;
                 
-                inet_ntop(AF_INET6,&sin6.sin6_addr, buffer, sizeof(buffer));
+                inet_ntop(AF_INET6, &sin6.sin6_addr, buffer, sizeof(buffer));
                 result = find_node(buffer);
                 if (result == -1) {
                     printf(" - Got a msg from node [%s]: not found in DB \n", buffer);
@@ -1394,7 +1394,7 @@ int main(int argc, char* argv[]) {
                     check_packet_for_node(&emergency_reply, emergency_node, node_db_list[emergency_node].encryption_phase);
 
                     if (emergency_reply.type == MSG_TYPE_ASYNC) {   
-                        printf(" - Got an emergency msg (%d bytes) from node %d [\033[1;32m%s\033[0m] \n", emergency_status, emergency_node, buffer);
+                        printf(" - Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", emergency_status, emergency_node, buffer);
                         printf("   + Cmd = 0x%02X, type = 0x%02X,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
                     
                         time(&rawtime );
@@ -1417,16 +1417,6 @@ int main(int argc, char* argv[]) {
                             if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
                                 memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
-                                //H = (uint8_t)(env_db.humidity >> 8);
-                                //L = (uint8_t)(env_db.humidity & 0xFF);
-                                //temp = ((uint32_t)H << 8) + (L & 0xFC);
-                                //temp = (((temp) * 15625L) >> 13) - 6000;
-                                //printf("     ++ Temperature = \033[1;35m %d.%u (ºC) \033[0m \n", env_db.temp / 10, env_db.temp % 10 );
-                                //printf("     ++ Light       = \033[1;35m %u (lux) \033[0m\n", env_db.light);
-                                //printf("     ++ Pressure    = \033[1;35m %u.%u (hPa) \033[0m\n", env_db.pressure / 10, env_db.pressure % 10);
-                                //printf("     ++ Humidity    = \033[1;35m %u.%u (RH)\033[0m\n", temp/1000, temp % 1000);
-                                //printf(" ----- Nex-hop     = %02x %02x \n", (uint8_t) node_db_list[emergency_node].next_hop_addr[14],(uint8_t) node_db_list[emergency_node].next_hop_addr[15] );
-
                                 // update sensor data
                                 update_sensor_data(emergency_node, env_db);
 
@@ -1442,6 +1432,7 @@ int main(int argc, char* argv[]) {
                         //if (node_db_list[emergency_node].authenticated==FALSE) {
                             node_db_list[emergency_node].encryption_phase = FALSE;
                             node_db_list[emergency_node].async_seq = 0;
+                            strcpy(node_db_list[emergency_node].connected,"Y");
 
 
                             printf(" - Node %d want to join network \n",emergency_node);
@@ -1565,7 +1556,7 @@ int main(int argc, char* argv[]) {
                 // update corresponding sequence
                 rx_reply.seq = old_seq;
                 //sprintf(pi_buf, "ACK %d", pi_msgcnt++);
-                printf("4. Sending RESPONE to user ACK-%d, seq = 0x%04X, ", pi_msgcnt++, old_seq);
+                printf("5. Sending RESPONE to user ACK-%d, seq = 0x%04X, ", pi_msgcnt++, old_seq);
                 res = write(connfd, &rx_reply, sizeof(rx_reply));     // for TCP
                 if (res == -1) {
                     printf(" - ERROR: reply to GW \n");
@@ -1616,13 +1607,13 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
     unsigned char key_arr[16];
 
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
-
+    /*
     printf(" - Check packet for node %d, key = [", nodeid);
     for (i = 0; i<16; i++) {
         printf("%02X ",key_arr[i]);
     }
     printf("]\n");
-
+    */
     if (encryption_en==true) {
         decrypt_payload(cmd, key_arr);
     }
@@ -1643,7 +1634,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     char str_app_key[32];
     unsigned char byte_array[16];
     char str_time[80];
-    int num_of_retrans;
+    int num_of_retrans, result;
 
     sin6len = sizeof(struct sockaddr_in6);
     strcpy(dst_ipv6addr,node_db_list[nodeid].ipv6_addr);
@@ -1686,10 +1677,11 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
 
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         if (status > 0)     {
-            printf("\n2. Forward REQUEST (%d bytes) to [\033[1;32m%s\033[0m]:%s, retry=%d  ....done\n",status, dst_ipv6addr,str_port, num_of_retrans);        
+            printf("\n3. Forward REQUEST (%d bytes) to node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m]:%s, retry=%d  ....done\n",status, nodeid, dst_ipv6addr,str_port, num_of_retrans);        
         } else {
-            printf("\n2. Forward REQUEST to [\033[1;32m%s\033[0m]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
+            printf("\n3. Forward REQUEST to [\033[1;32m%s\033[0m]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
         }    
+        printf("\n");
 
         /*wait for a reply */
         fd.fd = sock;
@@ -1699,7 +1691,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             printf(" - ERROR: GW forwarding command \n");
             num_of_retrans++;
         } else if (res == 0) {
-            printf(" - Time-out: GW forwarding command \n");
+            printf("4. Time-out: GW forwarding command \n");
             rx_reply = tx_cmd;
 
             num_of_retrans++;
@@ -1721,7 +1713,10 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             // implies (fd.revents & POLLIN) != 0
             rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0,(struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
             if (rev_bytes>=0) {
-                printf("3. Got REPLY (%d bytes):\n",rev_bytes);   
+
+                inet_ntop(AF_INET6, &rev_sin6.sin6_addr, buffer, sizeof(buffer));
+                result = find_node(buffer);                    
+                printf("4. Got REPLY (%d bytes) from node %d [%s]:\n",rev_bytes, result, buffer);   
                 p = (char *) (&rev_buffer); 
                 cmdPtr = (cmd_struct_t *)p;
                 rx_reply = *cmdPtr;
