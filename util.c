@@ -3,13 +3,13 @@
 | HCMC University of Technology                                     |
 | Telecommunications Departments                                    |
 | Utility for Smart Lighting System (SLS)                           |
-| Version: 1.0                                                      |
+| Version: 2.0                                                      |
 | Author: sonvq@hcmut.edu.vn                                        |
-| Date: 01/2017                                                     |
+| Date: 01/2019                                                     |
 |-------------------------------------------------------------------|
 */
 #include "util.h"
-#include "aes.h"
+//#include "aes.h"
 #include "sls.h"
 
 
@@ -53,7 +53,7 @@ void encrypt_cbc(uint8_t* data_encrypted, uint8_t* data, uint8_t* key, uint8_t* 
     printf("\nData: \n");
     phex_64(data);
 
-    AES128_CBC_encrypt_buffer(data_encrypted, data, 64, key, iv);
+    //AES128_CBC_encrypt_buffer(data_encrypted, data, 64, key, iv);
 
     //printf("\nData encrypted: \n");
     //phex_64(data_encrypted);
@@ -96,10 +96,10 @@ void  decrypt_cbc(uint8_t* data_decrypted, uint8_t* data_encrypted, uint8_t* key
     printf("\nData encrypted: \n");
     phex_64(data_encrypted);
 
-    AES128_CBC_decrypt_buffer(data_decrypted+0,  data_encrypted+0,  16, key, iv);
-    AES128_CBC_decrypt_buffer(data_decrypted+16, data_encrypted+16, 16, 0, 0);
-    AES128_CBC_decrypt_buffer(data_decrypted+32, data_encrypted+32, 16, 0, 0);
-    AES128_CBC_decrypt_buffer(data_decrypted+48, data_encrypted+48, 16, 0, 0);
+    //AES128_CBC_decrypt_buffer(data_decrypted+0,  data_encrypted+0,  16, key, iv);
+    //AES128_CBC_decrypt_buffer(data_decrypted+16, data_encrypted+16, 16, 0, 0);
+    //AES128_CBC_decrypt_buffer(data_decrypted+32, data_encrypted+32, 16, 0, 0);
+    //AES128_CBC_decrypt_buffer(data_decrypted+48, data_encrypted+48, 16, 0, 0);
 
     printf("Data decrypt: \n");
     phex_64(data_decrypted);
@@ -149,10 +149,6 @@ void gen_crc_for_cmd(cmd_struct_t *cmd) {
     crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
     cmd->crc = (uint16_t)crc16_check;
     printf(" - Generate CRC16... done,  0x%04X \n", crc16_check);
-    //for (i=0; i<MAX_CMD_DATA_LEN; i++) {
-    //    printf("0x%02X \n", cmd->arg[i]);
-    //}
-    //printf("\n");
 }
 
 

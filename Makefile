@@ -4,7 +4,7 @@ CP=/usr/bin/cp
 CFLAGS=-g -Wall -W 
 
 all: 
-	gcc -o main main.c util.c aes.c `mysql_config --cflags --libs`
+	gcc -o main main.c util.c `mysql_config --cflags --libs`
 
 
 util.o: util.c
