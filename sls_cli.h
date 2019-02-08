@@ -93,6 +93,7 @@ struct node_db_struct_t {
 	bool		encryption_phase;
 	uint16_t	cmd_seq;
 	uint16_t	async_seq;
+	float		async_prr;
 
 	env_struct_t	sensor;
 	sensor_data_t	sensor_db;

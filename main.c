@@ -212,6 +212,7 @@ void init_main() {
         gen_app_key_for_node(i);        
         reset_sequence(i);        
         node_db_list[i].encryption_phase = FALSE;
+        node_db_list[i].async_prr = 0;
     }
     printf("... DONE \n");
     printf("\n");
@@ -429,61 +430,60 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d (bytes), num_of_nodes = %d \n", sizeof(node_db_list), 
-        sizeof(node_db_struct_t), num_of_node);
+    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d (bytes), num_of_nodes = %d \n", sizeof(node_db_list), sizeof(node_db_struct_t), num_of_node);
     printf("Border router IP: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
     printf("\033[0m");
     
     if (SHOW_FULL_DB == TRUE) {        
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
-        printf("|node|       ipv6 address       |con/| req_| rep_|time | last|retr_|    last_seen      |chan |RSSI/LQI/power|emger_cnt |err_code| next | delay | ctrl|tempera_|light|pressure|humid|\n");
-        printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|  /seq    |  (hex) |  hop |  (ms) | rdr |ture(ºC)|(lux)| (hPa)  | (RH)|\n");
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------------|--------|------|-------|-----|--------|-----|--------|-----|\n");
+        printf("|node|       ipv6 address       |con/| req_| rep_|time | last|retr_|    last_seen      |chan |RSSI/LQI/power|   emger_cnt    |err_code| next | delay | ctrl|tempera_|light|pressure|humid|\n");
+        printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies |       time        | nel |(dBm)/  /(dBm)|  /seq /a_prr   |  (hex) |  hop |  (ms) | rdr |ture(ºC)|(lux)| (hPa)  | (RH)|\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------------|--------|------|-------|-----|--------|-----|--------|-----|\n");
         for(i = 0; i < num_of_node; i++) {
             if (i>0) {
-                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
+                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
+                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].async_prr, node_db_list[i].last_err_code,
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr,
                     node_db_list[i].sensor_db.temperature, (uint16_t)node_db_list[i].sensor_db.light, node_db_list[i].sensor_db.pressure, node_db_list[i].sensor_db.humidity);  
                 } else {
-                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
+                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
+                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].async_prr, node_db_list[i].last_err_code,
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t) node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr,
                     node_db_list[i].sensor_db.temperature, (uint16_t)node_db_list[i].sensor_db.light, node_db_list[i].sensor_db.pressure, node_db_list[i].sensor_db.humidity);
             }    
         }
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------|--------|------|-------|-----|--------|-----|--------|-----|\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------------|--------|------|-------|-----|--------|-----|--------|-----|\n");
 
     // show short table     
     } else {
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------|--------|------|-------|-----|\n");
-        printf("|node|       ipv6 address       |con/| req_| rep_|time | last|retr_|chan |RSSI/LQI/power|emger_cnt |err_code| next | delay | ctrl|\n");
-        printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies | nel |(dBm)/  /(dBm)|  /seq    |  (hex) |  hop |  (ms) | rdr |\n");
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------|--------|------|-------|-----|\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------------|--------|------|-------|-----|\n");
+        printf("|node|       ipv6 address       |con/| req_| rep_|time | last|retr_|chan |RSSI/LQI/power|   emger_cnt/   |err_code| next | delay | ctrl|\n");
+        printf("| id |  (prefix: aaaa::0/64)    |auth| uest| ly  |-out | cmd | ies | nel |(dBm)/  /(dBm)|  seq/async_prr |  (hex) |  hop |  (ms) | rdr |\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------------|--------|------|-------|-----|\n");
         for(i = 0; i < num_of_node; i++) {
             if (i>0) {
-                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
+                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].async_prr, node_db_list[i].last_err_code,
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
                 } else {
-                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%3u/%5X|%4d(%4d)| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
-                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].last_err_code,
+                    node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].async_prr, node_db_list[i].last_err_code,
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t) node_db_list[i].next_hop_addr[15], (double)0,node_db_list[i].rdr);
             }    
         }
-        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------|--------|------|-------|-----|\n");
+        printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------------|--------|------|-------|-----|\n");
     }
 }
 
@@ -1411,7 +1411,7 @@ int main(int argc, char* argv[]) {
 
                             // extract sensor data
                             if (node_db_list[emergency_node].async_seq >= emergency_reply.seq){
-                                printf("   + Duplicate async packet: last_seq = %d, curr_seq = %d \n",node_db_list[emergency_node].async_seq,
+                                printf("   + Duplicate async packet: last_seq = \033[1;35m%d\033[0m, curr_seq = \033[1;35m%d\033[0m \n",node_db_list[emergency_node].async_seq,
                                             emergency_reply.seq);
                             }
                             if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
@@ -1423,6 +1423,8 @@ int main(int argc, char* argv[]) {
                                 node_db_list[emergency_node].num_emergency_msg++;                                
                                 node_db_list[emergency_node].sensor = env_db;
                                 node_db_list[emergency_node].async_seq = emergency_reply.seq;
+                                node_db_list[emergency_node].async_prr = 100.0*node_db_list[emergency_node].num_emergency_msg/node_db_list[emergency_node].async_seq;
+
                                 memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
                             }
                         }
@@ -1556,6 +1558,7 @@ int main(int argc, char* argv[]) {
                 // update corresponding sequence
                 rx_reply.seq = old_seq;
                 //sprintf(pi_buf, "ACK %d", pi_msgcnt++);
+                printf("\n");
                 printf("5. Sending RESPONE to user ACK-%d, seq = 0x%04X, ", pi_msgcnt++, old_seq);
                 res = write(connfd, &rx_reply, sizeof(rx_reply));     // for TCP
                 if (res == -1) {
@@ -1594,7 +1597,7 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
 
     tx_cmd.crc = 0;
-    //gen_crc_for_cmd(cmd);
+    gen_crc_for_cmd(cmd);
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
@@ -1619,8 +1622,8 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
     }
 
     printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
-    //return check_crc_for_cmd(cmd);
-    return true;
+    return check_crc_for_cmd(cmd);
+    //return true;
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1716,7 +1719,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
 
                 inet_ntop(AF_INET6, &rev_sin6.sin6_addr, buffer, sizeof(buffer));
                 result = find_node(buffer);                    
-                printf("4. Got REPLY (%d bytes) from node %d [%s]:\n",rev_bytes, result, buffer);   
+                printf("4. Got REPLY (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n",rev_bytes, result, buffer);   
                 p = (char *) (&rev_buffer); 
                 cmdPtr = (cmd_struct_t *)p;
                 rx_reply = *cmdPtr;
