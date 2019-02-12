@@ -225,7 +225,8 @@ void init_main() {
     }
     printf("... DONE \n");
     printf("\n");
-    update_sql_db();
+    
+    //update_sql_db();
     //show_sql_db();
 }
 
