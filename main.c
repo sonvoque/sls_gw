@@ -38,10 +38,9 @@ Topology description:
 #include <dirent.h>
 #include <sys/types.h>
 
-//#include <mysql/my_global.h>
-//#ifdef USING_SQL_SERVER
+#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
-//#endif
+#endif
 
 #include "sls.h"
 #include "sls_cli.h"
@@ -49,7 +48,10 @@ Topology description:
 
 #define BUFSIZE 2048
 #define MAXBUF  sizeof(cmd_struct_t)
-#define SERVICE_PORT	21234	         /* hard-coded port number */
+
+#define SERVICE_PORT            21234	         /* hard-coded port number */
+#define REPORT_SERVER_PORT      21235            /* hard-coded port number */
+
 
 #define clear() printf("\033[H\033[J")
 
@@ -138,6 +140,7 @@ static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encr
 static void reset_sequence(int nodeid);
 static void update_sensor_data(int nodeid, env_struct_t env_db);
 static void show_network_topo();
+static void send_data_to_server(node_db_struct_t node_db); 
 
 struct timeval t0, t1;
 
@@ -369,9 +372,11 @@ void update3_sql_row(int nodeid) {
 
 /*------------------------------------------------*/
 void update_sql_row(int nodeid) {
+#ifdef USING_SQL_SERVER    
     update1_sql_row(nodeid);
     update2_sql_row(nodeid);
     update3_sql_row(nodeid);
+#endif    
 }
 
 /*------------------------------------------------*/
@@ -1601,6 +1606,10 @@ int main(int argc, char* argv[]) {
         }
         
         close(connfd);
+
+        // send report to server
+        send_data_to_server(node_db);
+
         sleep(1);       // for other threads process
 	}
 
@@ -1647,6 +1656,11 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
     printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
     return check_crc_for_cmd(cmd);
     //return true;
+}
+
+//-------------------------------------------------------------------------------------------
+static void send_data_to_server(node_db_struct_t node_db) {
+    printf("Send data to server \n");    
 }
 
 //-------------------------------------------------------------------------------------------
