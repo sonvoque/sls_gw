@@ -39,7 +39,9 @@ Topology description:
 #include <sys/types.h>
 
 //#include <mysql/my_global.h>
+#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
+#endif
 
 #include "sls.h"
 #include "sls_cli.h"
@@ -101,9 +103,12 @@ static void process_gw_cmd(cmd_struct_t cmd, int nodeid);
 
 
 /* database functions */
+#ifdef USING_SQL_SERVER
 static void finish_with_error(MYSQL *con);
 static void get_db_row(MYSQL_ROW row, int i);
 static int  execute_sql_cmd(char *sql);
+#endif
+
 static void show_sql_db();
 static void show_local_db();
 static void update1_sql_db();
@@ -139,6 +144,7 @@ struct timeval t0, t1;
 time_t rawtime;
 struct tm *timeinfo;
 
+#ifdef USING_SQL_SERVER
 MYSQL *con;
 char *sql_cmd; 
 
@@ -147,9 +153,11 @@ static char sql_server_ipaddr[20] ="localhost";
 static char sql_username[20]= "root";
 static char sql_password[20]= "Son100480";
 static char sql_db[20] = "sls_db";
+#endif
 
 
 /*------------------------------------------------*/
+#ifdef USING_SQL_SERVER
 void finish_with_error(MYSQL *con) {
 #ifdef USING_SQL_SERVER    
     fprintf(stderr, "%s\n", mysql_error(con));
@@ -157,6 +165,7 @@ void finish_with_error(MYSQL *con) {
     //exit(1);        
 #endif
 }
+#endif
 
 
 void show_network_topo() {
@@ -171,8 +180,8 @@ void show_network_topo() {
 }
 
 /*------------------------------------------------*/
-void get_db_row(MYSQL_ROW row, int i) {
 #ifdef USING_SQL_SERVER    
+void get_db_row(MYSQL_ROW row, int i) {
     /* if border router: always connected */
     if (i==0) {
         strcpy(node_db_list[i].connected,"Y");
@@ -183,8 +192,8 @@ void get_db_row(MYSQL_ROW row, int i) {
     strcpy(node_db_list[i].ipv6_addr,row[2]);
     strcpy(node_db_list[i].app_key,row[15]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
-#endif
 }
+#endif
 
 
 /*------------------------------------------------*/
@@ -514,7 +523,11 @@ void show_sql_db() {
     printf("\n");
     printf("|---------------------------------------------SQL DATABASE---------------------------------------------------|\n");
     num_fields = mysql_num_fields(result);
+
+#ifdef USING_SQL_SERVER    
     MYSQL_ROW row;
+#endif
+
     while ((row = mysql_fetch_row(result)))  { 
         for(i = 0; i < num_fields; i++) {
             if (i==0) {
