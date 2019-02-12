@@ -39,9 +39,7 @@ Topology description:
 #include <sys/types.h>
 
 //#include <mysql/my_global.h>
-#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
-#endif        
 
 #include "sls.h"
 #include "sls_cli.h"
