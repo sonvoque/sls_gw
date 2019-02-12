@@ -432,8 +432,10 @@ void update2_sql_db() {
 
 /*------------------------------------------------*/
 void update_sql_db() {
+#ifdef USING_SQL_SERVER    
     update1_sql_db();
-    update2_sql_db();    
+    update2_sql_db();  
+#endif      
 }
 
 /*------------------------------------------------*/
