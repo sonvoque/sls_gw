@@ -1670,7 +1670,7 @@ int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     struct addrinfo sainfo, *psinfo;
     struct sockaddr_in6 sin6;
     int sin6len;
-    char buffer[MAXBUF];
+    char buffer[MAXBUF]="";
     char str_app_key[32];
     unsigned char byte_array[16];
     char str_time[80];
