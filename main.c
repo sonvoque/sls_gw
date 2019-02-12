@@ -223,10 +223,12 @@ void init_main() {
         node_db_list[i].encryption_phase = FALSE;
         node_db_list[i].async_prr = 0;
     }
+    
+    update_sql_db();
+
     printf("... DONE \n");
     printf("\n");
-    
-    //update_sql_db();
+
     //show_sql_db();
 }
 
