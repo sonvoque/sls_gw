@@ -39,9 +39,9 @@ Topology description:
 #include <sys/types.h>
 
 //#include <mysql/my_global.h>
-#ifdef USING_SQL_SERVER
+//#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
-#endif
+//#endif
 
 #include "sls.h"
 #include "sls_cli.h"
@@ -1256,12 +1256,17 @@ int find_node(char *ip_addr) {
 /*------------------------------------------------*/
 static void run_reload_gw_fw(){
     clear();
+
     read_node_list();
+    
     init_main();
+    
     run_node_discovery();
+
 #ifdef AUTO_SET_APP_KEY
     auto_set_app_key();
 #endif
+
     update_sql_db();
     show_local_db();    
 }
