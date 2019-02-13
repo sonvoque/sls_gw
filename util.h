@@ -24,7 +24,6 @@
 #include <dirent.h>
 #include <sys/types.h>
 
-//#include <mysql/mysql.h>
 #include "sls.h"
 #include "sls_cli.h"
 

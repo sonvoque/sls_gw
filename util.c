@@ -262,5 +262,5 @@ void gen_random_key_128(unsigned char* key){
     for (i=0; i<16; i++) {
         byte_array[i] = gen_random_num() & 0xFF;
     }
-    strcpy(key,byte_array); 
+    memcpy(key, byte_array, 16); 
 }
