@@ -140,7 +140,7 @@ static bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid,  bool encr
 static void reset_sequence(int nodeid);
 static void update_sensor_data(int nodeid, env_struct_t env_db);
 static void show_network_topo();
-static void send_data_to_server(node_db_struct_t node_db); 
+static void send_data_to_server(int node_id); 
 
 struct timeval t0, t1;
 
@@ -1506,6 +1506,9 @@ int main(int argc, char* argv[]) {
                             }
                         }
 
+                        // send report to server
+                        send_data_to_server(emergency_node);
+
                         update_sql_row(emergency_node);
                         show_local_db();
                     }
@@ -1597,6 +1600,9 @@ int main(int argc, char* argv[]) {
                     printf("%d (bytes)... successful \n", res);                    
                 }
 
+                // send report to server
+                send_data_to_server(node_id);
+
                 show_local_db();
             
                 printf("\033[1;32m");
@@ -1606,9 +1612,6 @@ int main(int argc, char* argv[]) {
         }
         
         close(connfd);
-
-        // send report to server
-        send_data_to_server(node_db);
 
         sleep(1);       // for other threads process
 	}
@@ -1659,7 +1662,7 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 }
 
 //-------------------------------------------------------------------------------------------
-static void send_data_to_server(node_db_struct_t node_db) {
+static void send_data_to_server(int node_id) {
     printf("Send data to server \n");    
 }
 
