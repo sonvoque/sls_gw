@@ -38,9 +38,9 @@ Topology description:
 #include <dirent.h>
 #include <sys/types.h>
 
-#ifdef USING_SQL_SERVER
+//#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
-#endif
+//#endif
 
 #include "sls.h"
 #include "sls_cli.h"
@@ -1663,7 +1663,8 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 
 //-------------------------------------------------------------------------------------------
 static void send_data_to_server(int node_id) {
-    printf("Send data to server \n");    
+    node_db = node_db_list[node_id];  
+    printf(" - Send data to waiting server, port = %d,.... DISABLED \n", REPORT_SERVER_PORT);  
 }
 
 //-------------------------------------------------------------------------------------------

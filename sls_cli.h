@@ -14,7 +14,8 @@
 #ifndef SLS_CLI_H_
 #define SLS_CLI_H_
 
-#define USING_SQL_SERVER_ENABLE	0
+#define USING_SQL_SERVER_ENABLE	1
+
 #if (USING_SQL_SERVER_ENABLE)
 #define USING_SQL_SERVER
 #endif

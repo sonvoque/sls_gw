@@ -252,15 +252,18 @@ uint16_t gen_random_num() {
     uint16_t random1, random2;
     random1 = rand() % 255;
     random2 = rand() % 255;    
-    return (random1<<8) | (random2);   
+    return (random1 << 8) | (random2);   
 }
 
 /*---------------------------------------------------------------------------*/
 void gen_random_key_128(unsigned char* key){
     int i;
     unsigned char byte_array[16];
+    uint16_t temp;
+
     for (i=0; i<16; i++) {
-        byte_array[i] = gen_random_num() & 0xFF;
+        temp = gen_random_num();
+        byte_array[i] = (unsigned char)(temp & 0xFF);
     }
     memcpy(key, byte_array, 16); 
 }
