@@ -129,7 +129,7 @@ static bool is_node_connected(int node);
 static void auto_set_app_key();
 static void set_node_app_key (int node_id);
 static void run_reload_gw_fw();
-static int num_of_active_node();
+static int  num_of_active_node();
 static void reset_reply_data();
 static char* add_ipaddr(char *buf, int nodeid);
 
@@ -1668,7 +1668,7 @@ static void send_data_to_server(int node_id) {
 }
 
 //-------------------------------------------------------------------------------------------
-int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
+static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     int sock;
     int status, i;
     struct addrinfo sainfo, *psinfo;
