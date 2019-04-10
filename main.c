@@ -1445,7 +1445,7 @@ int main(int argc, char* argv[]) {
                             if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
                                 memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
-                                // update sensor data
+                                // update sensor data and print them
                                 update_sensor_data(emergency_node, env_db);
 
                                 node_db_list[emergency_node].num_emergency_msg++;                                
@@ -1664,7 +1664,13 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 //-------------------------------------------------------------------------------------------
 static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
+    
     printf(" - Send data to waiting server, port = %d,.... DISABLED \n", REPORT_SERVER_PORT);  
+    printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
+    printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
+    printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
+    printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+    
 }
 
 //-------------------------------------------------------------------------------------------
