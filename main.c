@@ -55,12 +55,27 @@ Topology description:
 
 #define clear() printf("\033[H\033[J")
 
+
+#define USING_LESS_RETRANS_CONF             TRUE
+
+#if (USING_LESS_RETRANS_CONF==TRUE)
+#define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
+#define TIME_OUT                2           // seconds: recommend 4s
+#define NUM_RETRANS_AUTHEN      2          // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     2           // for setting application key: default = 5
+#define NUM_RETRANS             2           // for commands: default = 5
+#else
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                4           // seconds: recommend 4s
 #define NUM_RETRANS_AUTHEN      5          // for authentication; default = 5
 #define NUM_RETRANS_SET_KEY     5           // for setting application key: default = 5
 #define NUM_RETRANS             5           // for commands: default = 5
+#endif
+
+
 #define SHOW_FULL_DB            FALSE
+
+
 
 static  struct  sockaddr_in6 rev_sin6;
 static  int     rev_sin6len;
@@ -120,6 +135,7 @@ static void update1_sql_row(int nodeid);
 static void update2_sql_row(int nodeid);
 static void update3_sql_row(int nodeid);
 static void update_sql_row(int nodeid);
+static void update_sql_sensor(int nodeid);
 
 static int  execute_broadcast_cmd(cmd_struct_t cmd, int val, int mode);
 static int  execute_multicast_cmd(cmd_struct_t cmd);
@@ -365,10 +381,43 @@ void update3_sql_row(int nodeid) {
     if (execute_sql_cmd(sql)==0){
         //printf("sql_cmd = %s\n", sql);
     }    
-    //free(result);    
     //printf("UPDATE SENSOR DATA TO DB....SUCCESSFUL");
 #endif    
 }
+
+
+/*------------------------------------------------*/
+void update_sql_sensor(int nodeid) {
+#ifdef USING_SQL_SERVER    
+    char sql[400];
+    //char buf[MAX_CMD_DATA_LEN];
+
+    //memcpy(buf, &node_db_list[nodeid].last_emergency_msg, 20);    
+    //convert_array2str(buf, sizeof(buf), &result);    
+    //printf("\nresult : %s\n", result);
+    //printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db.sensor_db.temperature );
+    //printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db.sensor_db.light);
+    //printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db.sensor_db.pressure);
+    //printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db.sensor_db.humidity);
+
+    if (is_node_connected(nodeid)) {
+        sprintf(sql,"UPDATE sls_db SET connected='Y', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f  WHERE node_id=%d;", 
+                node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light,
+                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  nodeid);
+    } else {
+        sprintf(sql,"UPDATE sls_db SET connected='N', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f  WHERE node_id=%d;", 
+                node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light,
+                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  nodeid);
+    }    
+    
+    if (execute_sql_cmd(sql)==0){
+        //printf("sql_cmd = %s\n", sql);
+    }    
+
+    //free(result);    
+#endif    
+}
+
 
 /*------------------------------------------------*/
 void update_sql_row(int nodeid) {
@@ -376,6 +425,7 @@ void update_sql_row(int nodeid) {
     update1_sql_row(nodeid);
     update2_sql_row(nodeid);
     update3_sql_row(nodeid);
+    update_sql_sensor(nodeid);    
 #endif    
 }
 
@@ -1446,7 +1496,7 @@ int main(int argc, char* argv[]) {
                                 memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
                                 // update sensor data and print them
-                                update_sensor_data(emergency_node, env_db);
+                                update_sensor_data(emergency_node, env_db);                
 
                                 node_db_list[emergency_node].num_emergency_msg++;                                
                                 node_db_list[emergency_node].sensor = env_db;
@@ -1454,6 +1504,9 @@ int main(int argc, char* argv[]) {
                                 node_db_list[emergency_node].async_prr = 100.0*node_db_list[emergency_node].num_emergency_msg/node_db_list[emergency_node].async_seq;
 
                                 memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
+
+                                // send report to server
+                                send_data_to_server(emergency_node);
                             }
                         }
 
@@ -1505,9 +1558,6 @@ int main(int argc, char* argv[]) {
                                 }
                             }
                         }
-
-                        // send report to server
-                        send_data_to_server(emergency_node);
 
                         update_sql_row(emergency_node);
                         show_local_db();
@@ -1666,10 +1716,10 @@ static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
     printf(" - Send data to waiting server, port = %d,.... DISABLED \n", REPORT_SERVER_PORT);  
-    printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
-    printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
-    printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
-    printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+    printf("     ++ Temperature = \033[0;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
+    printf("Light = \033[0;33m%.0f (lux) \033[0m, ", node_db.sensor_db.light);
+    printf("Pressure = \033[0;33m%.1f (hPa) \033[0m, ", node_db.sensor_db.pressure);
+    printf("Humidity = \033[0;33m%.2f (RH) \033[0m\n", node_db.sensor_db.humidity);
     
 }
 
