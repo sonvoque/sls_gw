@@ -33,7 +33,11 @@ SLS_USING_HW = 0 : for compiling to SKY/Z1 used in Cooja simulation
 SLS_USING_HW = 1 : for compiling to CC2538dk: 2.4Ghz
 SLS_USING_HW = 2 : for compiling to CC2530DK: 2.4Ghz  
 SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
+
 #define SLS_USING_HW		0
+
+#define CC2538DK_HAS_SENSOR  FALSE
+
 
 #if (SLS_USING_HW==0)
 #define SLS_USING_SKY
@@ -273,6 +277,7 @@ struct env_struct_t {
 	uint16_t	humidity;
 	uint16_t	pir;
 	uint16_t	rain;
+	
 } __attribute__((packed));
 
 /* This data structure is used to store the packet content (payload) */

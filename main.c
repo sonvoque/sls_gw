@@ -13,9 +13,9 @@
 
 Topology description:
 
-        |----------|     IPv6     |-----------|      IPv4       |----------|
+        |----------|     IPv6     |-----------|   IPv4/IPv6     |----------|
         | 6LoWPAN  | ------------ |  Gateway  | --------------- | Client   |   
-        | network  |   wireless   | + BR + DB |  wire/wireless  | software |
+        | network  |   wireless   | + BR + DB |  wired/wireless | software |
         |----------|              |-----------|                 |----------|
 
 */
@@ -193,7 +193,7 @@ void show_network_topo() {
     printf("\n");
     printf("    |----------|     IPv6     \033[1;35m|-----------|\033[0m      IPv4       |----------| \n");
     printf("    | 6LoWPAN  |<------------>\033[1;35m|  Gateway  |\033[0m<--------------->| Client   | \n");
-    printf("    | network  |   wireless   \033[1;35m| + BR + DB |\033[0m  wire/wireless  | software | \n");
+    printf("    | network  |   wireless   \033[1;35m| + BR + DB |\033[0m  wired/wireless | software | \n");
     printf("    |----------|              \033[1;35m|-----------|\033[0m                 |----------| \n");
     printf("\n");
 }
@@ -401,13 +401,21 @@ void update_sql_sensor(int nodeid) {
     //printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db.sensor_db.humidity);
 
     if (is_node_connected(nodeid)) {
-        sprintf(sql,"UPDATE sls_db SET connected='Y', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f  WHERE node_id=%d;", 
+        sprintf(sql,"UPDATE sls_db SET connected='Y', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f, oil_voltage=%.2f, oil_current=%.2f, water_voltage=%.2f, water_current=%.2f, pressure_voltage=%.2f, pressure_current=%.2f WHERE node_id=%d;", 
                 node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light,
-                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  nodeid);
+                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  
+                node_db_list[nodeid].sensor_db.oil_voltage, node_db_list[nodeid].sensor_db.oil_current,
+                node_db_list[nodeid].sensor_db.water_voltage, node_db_list[nodeid].sensor_db.water_current,
+                node_db_list[nodeid].sensor_db.pressure_voltage, node_db_list[nodeid].sensor_db.pressure_current,
+                nodeid);
     } else {
-        sprintf(sql,"UPDATE sls_db SET connected='N', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f  WHERE node_id=%d;", 
+        sprintf(sql,"UPDATE sls_db SET connected='N', temperature=%.1f, light=%.0f, pressure=%.1f, humidity=%.2f, oil_voltage=%.2f, oil_current=%.2f, water_voltage=%.2f, water_current=%.2f, pressure_voltage=%.2f, pressure_current=%.2f WHERE node_id=%d;", 
                 node_db_list[nodeid].sensor_db.temperature, node_db_list[nodeid].sensor_db.light,
-                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  nodeid);
+                node_db_list[nodeid].sensor_db.pressure, node_db_list[nodeid].sensor_db.humidity,  
+                node_db_list[nodeid].sensor_db.oil_voltage, node_db_list[nodeid].sensor_db.oil_current,
+                node_db_list[nodeid].sensor_db.water_voltage, node_db_list[nodeid].sensor_db.water_current,
+                node_db_list[nodeid].sensor_db.pressure_voltage, node_db_list[nodeid].sensor_db.pressure_current,
+                nodeid);
     }    
     
     if (execute_sql_cmd(sql)==0){
@@ -861,7 +869,7 @@ void run_node_discovery(){
                 } 
                 add_ipaddr(buf,i);
                 strcpy(node_db_list[i].next_hop_link_addr, buf);
-                printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link-addr = %s\n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
+                printf(" - Node %d [\033[1;32m%s\033[0m] available, next-hop link-addr = [\033[1;32m%s\033[0m] \n", i, node_db_list[i].ipv6_addr, node_db_list[i].next_hop_link_addr);
             }
         }
     }
@@ -1332,29 +1340,76 @@ static void update_sensor_data(int nodeid, env_struct_t env_db){
     uint8_t H, L;
     uint32_t temp;
 
-    node_db_list[nodeid].sensor_db.temperature = (float) env_db.temp;
-    node_db_list[nodeid].sensor_db.temperature = node_db_list[nodeid].sensor_db.temperature /10;
+    if (CC2538DK_HAS_SENSOR==TRUE) {
+        node_db_list[nodeid].sensor_db.temperature = (float) env_db.temp;
+        node_db_list[nodeid].sensor_db.temperature = node_db_list[nodeid].sensor_db.temperature /10;
 
-    node_db_list[nodeid].sensor_db.pressure = (float) env_db.pressure;
-    node_db_list[nodeid].sensor_db.pressure = node_db_list[nodeid].sensor_db.pressure /10;
+        node_db_list[nodeid].sensor_db.pressure = (float) env_db.pressure;
+        node_db_list[nodeid].sensor_db.pressure = node_db_list[nodeid].sensor_db.pressure /10;
 
-    node_db_list[nodeid].sensor_db.light = (float) env_db.light;
+        node_db_list[nodeid].sensor_db.light = (float) env_db.light;
 
-    H = (uint8_t)(env_db.humidity >> 8);
-    L = (uint8_t)(env_db.humidity & 0xFF);
-    temp = ((uint32_t)H << 8) + (L & 0xFC);
-    temp = (((temp) * 15625L) >> 13) - 6000;
+        H = (uint8_t)(env_db.humidity >> 8);
+        L = (uint8_t)(env_db.humidity & 0xFF);
+        temp = ((uint32_t)H << 8) + (L & 0xFC);
+        temp = (((temp) * 15625L) >> 13) - 6000;
 
-    node_db_list[nodeid].sensor_db.humidity = (float)(temp*1.0);
-    node_db_list[nodeid].sensor_db.humidity = node_db_list[nodeid].sensor_db.humidity/1000;
+        node_db_list[nodeid].sensor_db.humidity = (float)(temp*1.0);
+        node_db_list[nodeid].sensor_db.humidity = node_db_list[nodeid].sensor_db.humidity/1000;
 
-    printf("   + New async packet, extract data and update DB: \n");
-    if (SHOW_FULL_DB == FALSE) {
-        printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
-        printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
-        printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
-        printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+        printf("   + New async packet, extract data and update DB: \n");
+        if (SHOW_FULL_DB == FALSE) {
+            printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
+            printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
+            printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
+            printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+        }
+    } else {
+        // no sensor shield
+        // extract data
     }
+
+}
+
+
+void process_arduino_data(int emergency_node, cmd_struct_t emergency_reply) {
+    uint16_t temp16;
+    float temp_f;
+    int i;
+    
+    printf("   + \033[1;35mUART data\033[0m: %d bytes ...[", 9);
+    for (i=0; i<9; i++)
+        printf("\033[0;33m%02X \033[0m",emergency_reply.arg[i]);     
+    printf("]\n");
+
+    temp16 = emergency_reply.arg[0];
+    temp16 = (temp16 << 8) | emergency_reply.arg[1];
+    temp_f = (float)temp16;
+    node_db_list[emergency_node].sensor_db.oil_voltage = temp_f/100;
+
+    temp_f = emergency_reply.arg[2];
+    node_db_list[emergency_node].sensor_db.oil_current = temp_f/10;
+
+
+    temp16 = emergency_reply.arg[3];
+    temp16 = (temp16 << 8) | emergency_reply.arg[4];
+    temp_f = (float)temp16;
+    node_db_list[emergency_node].sensor_db.water_voltage = temp_f/100;
+
+    temp_f = emergency_reply.arg[5];
+    node_db_list[emergency_node].sensor_db.water_current = temp_f/10;
+
+    temp16 = emergency_reply.arg[6];
+    temp16 = (temp16 << 8) | emergency_reply.arg[7];
+    temp_f = (float)temp16;
+    node_db_list[emergency_node].sensor_db.pressure_voltage = temp_f/100;
+
+    temp_f = emergency_reply.arg[8];
+    node_db_list[emergency_node].sensor_db.pressure_current = temp_f/10;
+
+    printf("     + Oil      voltage = \033[0;33m%.2f\033[0m (mV); current = \033[0;33m%.2f (mA)\033[0m \n", node_db_list[emergency_node].sensor_db.oil_voltage, node_db_list[emergency_node].sensor_db.oil_current );
+    printf("     + Water    voltage = \033[0;33m%.2f\033[0m (mV); current = \033[0;33m%.2f (mA)\033[0m \n", node_db_list[emergency_node].sensor_db.water_voltage, node_db_list[emergency_node].sensor_db.water_current );
+    printf("     + Pressure voltage = \033[0;33m%.2f\033[0m (mV); current = \033[0;33m%.2f (mA)\033[0m \n", node_db_list[emergency_node].sensor_db.pressure_voltage, node_db_list[emergency_node].sensor_db.pressure_current );
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1487,11 +1542,13 @@ int main(int argc, char* argv[]) {
                                 printf("%02X",emergency_reply.arg[i]);     
                             printf("]\n");
 
-                            // extract sensor data
+
                             if (node_db_list[emergency_node].async_seq >= emergency_reply.seq){
                                 printf("   + Duplicate async packet: last_seq = \033[1;35m%d\033[0m, curr_seq = \033[1;35m%d\033[0m \n",node_db_list[emergency_node].async_seq,
                                             emergency_reply.seq);
                             }
+
+                            // extract sensor data
                             if (node_db_list[emergency_node].async_seq < emergency_reply.seq) {                                
                                 memcpy(&env_db, emergency_reply.arg, sizeof(env_db));
 
@@ -1508,6 +1565,11 @@ int main(int argc, char* argv[]) {
                                 // send report to server
                                 send_data_to_server(emergency_node);
                             }
+
+                            
+                            // data test UART here
+                            process_arduino_data(emergency_node, emergency_reply);
+
                         }
 
                         //send authentication here
