@@ -148,7 +148,7 @@ void gen_crc_for_cmd(cmd_struct_t *cmd) {
     memcpy(&byte_arr, cmd, MAX_CMD_LEN-2);
     crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
     cmd->crc = (uint16_t)crc16_check;
-    printf(" - Generate CRC16... done,  0x%04X \n", crc16_check);
+    printf(" - Generate CRC-16...done, 0x%04X \n", crc16_check);
 }
 
 
@@ -161,11 +161,11 @@ bool check_crc_for_cmd(cmd_struct_t *cmd) {
     crc16_check = gen_crc16(byte_arr, MAX_CMD_LEN-2);
 
     if (crc16_check == cmd->crc) {
-        printf(" - Check CRC16... matched, CRC-cal = 0x%04X \n", crc16_check);
+        printf(" - Check CRC-16...matched, CRC-cal = 0x%04X \n", crc16_check);
         return true;
     }
     else{
-        printf(" - Check CRC16... failed, CRC-cal = 0x%04X; CRC-val =  0x%04X \n",crc16_check, cmd->crc);
+        printf(" - Check CRC-16...failed, CRC-cal = 0x%04X; CRC-val =  0x%04X \n",crc16_check, cmd->crc);
         return false;        
     }        
 }

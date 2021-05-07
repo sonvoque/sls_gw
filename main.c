@@ -56,25 +56,25 @@ Topology description:
 #define clear() printf("\033[H\033[J")
 
 
+/* if using simulation: set to TRUE to reduce the sim time */
 #define USING_LESS_RETRANS_CONF             TRUE
 
 #if (USING_LESS_RETRANS_CONF==TRUE)
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT                2           // seconds: recommend 4s
-#define NUM_RETRANS_AUTHEN      2          // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY     2           // for setting application key: default = 5
-#define NUM_RETRANS             2           // for commands: default = 5
+#define TIME_OUT                8           // seconds: recommend 5s
+#define NUM_RETRANS_AUTHEN      3           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     3           // for setting application key: default = 5
+#define NUM_RETRANS             3           // for commands: default = 5
 #else
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT                4           // seconds: recommend 4s
-#define NUM_RETRANS_AUTHEN      5          // for authentication; default = 5
+#define TIME_OUT                8           // seconds: recommend 5s
+#define NUM_RETRANS_AUTHEN      5           // for authentication; default = 5
 #define NUM_RETRANS_SET_KEY     5           // for setting application key: default = 5
 #define NUM_RETRANS             5           // for commands: default = 5
 #endif
 
 
 #define SHOW_FULL_DB            FALSE
-
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -159,7 +159,6 @@ static void show_network_topo();
 static void send_data_to_server(int node_id); 
 
 struct timeval t0, t1;
-
 time_t rawtime;
 struct tm *timeinfo;
 
@@ -507,10 +506,11 @@ void update_sql_db() {
 /*------------------------------------------------*/
 void show_local_db() { 
     int i;
-    printf("\nLOCAL DATABASE: table_size = %d (bytes); node_size = %d (bytes), num_of_nodes = %d \n", sizeof(node_db_list), sizeof(node_db_struct_t), num_of_node);
-    printf("Border router IP: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
+    printf("\nLOCAL DATABASE: table_size (bytes) =\033[1;35m %d\033[0m, node_size (bytes) =\033[1;35m %d\033[0m, num_of_nodes = \033[1;35m%d \033[0m\n", sizeof(node_db_list), sizeof(node_db_struct_t), num_of_node);
+    printf("Border router IPv6: \033[1;32m%s \n",node_db_list[0].ipv6_addr);
     printf("\033[0m");
     
+
     if (SHOW_FULL_DB == TRUE) {        
         printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------------|--------|------|-------|-----|--------|-----|--------|-----|\n");
         printf("|node|       ipv6 address       |con/| req_| rep_|time | last|retr_|    last_seen      |chan |RSSI/LQI/power|   emger_cnt    |err_code| next | delay | ctrl|tempera_|light|pressure|humid|\n");
@@ -882,7 +882,7 @@ void prepare_cmd(int nodeid) {
     node_db_list[nodeid].cmd_seq++;
     tx_cmd.sfd = SFD;
     tx_cmd.seq = node_db_list[nodeid].cmd_seq;
-    printf("\n2. Prepare cmd for node %d, seq = %d \n", nodeid, tx_cmd.seq);  
+    printf("\n2. Prepare COMMAND [seq=\033[1;35m%d\033[0m] for node \033[1;32m%d\033[0m \n", tx_cmd.seq, nodeid);  
 }
 
 
@@ -1377,7 +1377,7 @@ void process_arduino_data(int emergency_node, cmd_struct_t emergency_reply) {
     float temp_f;
     int i;
     
-    printf("   + \033[1;35mUART data\033[0m: %d bytes ...[", 9);
+    printf("   + \033[1;35mUART data\033[0m (%d bytes): [", 9);
     for (i=0; i<9; i++)
         printf("\033[0;33m%02X \033[0m",emergency_reply.arg[i]);     
     printf("]\n");
@@ -1528,7 +1528,7 @@ int main(int argc, char* argv[]) {
 
                     if (emergency_reply.type == MSG_TYPE_ASYNC) {   
                         printf(" - Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", emergency_status, emergency_node, buffer);
-                        printf("   + Cmd = 0x%02X, type = 0x%02X,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
+                        printf("   + Cmd =\033[1;35m 0x%02X\033[0m, type =\033[1;35m 0x%02X\033[0m,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
                     
                         time(&rawtime );
                         timeinfo = localtime(&rawtime );
@@ -1537,7 +1537,7 @@ int main(int argc, char* argv[]) {
                         strcpy(node_db_list[emergency_node].connected,"Y");
 
                         if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
-                            printf("   + Emergency data: %d bytes ...[",MAX_CMD_DATA_LEN);
+                            printf("   + \033[1;35mEmergency data\033[0m (%d bytes): [",MAX_CMD_DATA_LEN);
                             for (i=0; i<MAX_CMD_DATA_LEN; i++)
                                 printf("%02X",emergency_reply.arg[i]);     
                             printf("]\n");
@@ -1562,13 +1562,12 @@ int main(int argc, char* argv[]) {
 
                                 memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
 
+                                // data test UART here
+                                process_arduino_data(emergency_node, emergency_reply);
+
                                 // send report to server
                                 send_data_to_server(emergency_node);
                             }
-
-                            
-                            // data test UART here
-                            process_arduino_data(emergency_node, emergency_reply);
 
                         }
 
@@ -1759,9 +1758,7 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
     convert_str2array(node_db_list[nodeid].app_key, key_arr, 16);
     /*
     printf(" - Check packet for node %d, key = [", nodeid);
-    for (i = 0; i<16; i++) {
-        printf("%02X ",key_arr[i]);
-    }
+    for (i = 0; i<16; i++) { printf("%02X ",key_arr[i]);  }
     printf("]\n");
     */
     if (encryption_en==true) {
@@ -1770,15 +1767,14 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 
     printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
     return check_crc_for_cmd(cmd);
-    //return true;
 }
 
 //-------------------------------------------------------------------------------------------
 static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
-    printf(" - Send data to waiting server, port = %d,.... DISABLED \n", REPORT_SERVER_PORT);  
-    printf("     ++ Temperature = \033[0;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
+    printf("   + \033[1;35mSend data to server\033[0m [IP]:%d... DISABLED \n", REPORT_SERVER_PORT);  
+    printf("    ++ Temperature = \033[0;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
     printf("Light = \033[0;33m%.0f (lux) \033[0m, ", node_db.sensor_db.light);
     printf("Pressure = \033[0;33m%.1f (hPa) \033[0m, ", node_db.sensor_db.pressure);
     printf("Humidity = \033[0;33m%.2f (RH) \033[0m\n", node_db.sensor_db.humidity);
@@ -1838,10 +1834,11 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
         //tx_cmd.seq = random();
 
         status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
+        printf("\n3. Forward REQUEST [retry=\033[1;35m%d\033[0m] (%d bytes) to node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m]:\033[1;32m%s\033[0m ", num_of_retrans, status, nodeid, dst_ipv6addr,str_port);        
         if (status > 0)     {
-            printf("\n3. Forward REQUEST (%d bytes) to node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m]:%s, retry=%d  ....done\n",status, nodeid, dst_ipv6addr,str_port, num_of_retrans);        
+            printf("... done\n");        
         } else {
-            printf("\n3. Forward REQUEST to [\033[1;32m%s\033[0m]:%s, retry=%d  ....ERROR\n",dst_ipv6addr,str_port,num_of_retrans);  
+            printf("... ERROR\n");  
         }    
         printf("\n");
 

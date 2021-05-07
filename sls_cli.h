@@ -59,6 +59,14 @@ struct sensor_data_t {
 	float		humidity;
 	float 		pir;
 	float 		rain;
+
+	//arduino
+	float		oil_voltage;
+	float		oil_current;
+	float		water_voltage;
+	float		water_current;
+	float		pressure_voltage;
+	float		pressure_current;
 };
 
 typedef struct sensor_data_t		sensor_data_t;
