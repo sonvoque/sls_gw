@@ -14,12 +14,6 @@
 #ifndef SLS_CLI_H_
 #define SLS_CLI_H_
 
-#define USING_SQL_SERVER_ENABLE	1
-
-#if (USING_SQL_SERVER_ENABLE)
-#define USING_SQL_SERVER
-#endif
-
 #define MAX_NUM_OF_NODE			100
 #define ALL_NODE				2
 #define ODD_NODE				1

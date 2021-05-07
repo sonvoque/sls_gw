@@ -12,6 +12,13 @@
 #ifndef SLS_H_
 #define SLS_H_
 
+#define USING_SQL_SERVER_ENABLE	1
+
+#if (USING_SQL_SERVER_ENABLE)
+#define USING_SQL_SERVER
+#endif
+
+
 //#define IEEE802154_CONF_PANID		0xDCBA
 #define SLS_PAN_ID	 IEEE802154_CONF_PANID
 
