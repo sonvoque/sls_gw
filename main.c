@@ -1541,7 +1541,7 @@ int main(int argc, char* argv[]) {
                         strcpy(node_db_list[emergency_node].connected,"Y");
 
 
-                        printf(" - [\033[1;35m%s\033[0m] Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", str_time, emergency_status, emergency_node, buffer);
+                        printf(" - [\033[1;33m%s\033[0m] Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", str_time, emergency_status, emergency_node, buffer);
                         printf("   + Cmd =\033[1;35m 0x%02X\033[0m, type =\033[1;35m 0x%02X\033[0m,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
                     
 
