@@ -60,11 +60,11 @@ Topology description:
 #define USING_LESS_RETRANS_CONF             TRUE
 
 #if (USING_LESS_RETRANS_CONF==TRUE)
-#define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
-#define TIME_OUT                8           // seconds: recommend 5s
-#define NUM_RETRANS_AUTHEN      3           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY     3           // for setting application key: default = 5
-#define NUM_RETRANS             3           // for commands: default = 5
+#define MAX_TIMEOUT             2          // seconds for a long chain topology 60 nodes: 10s
+#define TIME_OUT                5           // seconds: recommend 5s
+#define NUM_RETRANS_AUTHEN      1           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     1           // for setting application key: default = 5
+#define NUM_RETRANS             1           // for commands: default = 5
 #else
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                8           // seconds: recommend 5s
@@ -171,6 +171,7 @@ static char sql_server_ipaddr[20] ="localhost";
 static char sql_username[20]= "root";
 static char sql_password[20]= "Son100480";
 static char sql_db[20] = "sls_db";
+static char sim_gw_ipv6[40] = "aaaa::212:7401:1:101"; 
 #endif
 
 
@@ -200,16 +201,22 @@ void show_network_topo() {
 /*------------------------------------------------*/
 #ifdef USING_SQL_SERVER    
 void get_db_row(MYSQL_ROW row, int i) {
-    /* if border router: always connected */
-    if (i==0) {
-        strcpy(node_db_list[i].connected,"Y");
-    }        
-
     node_db_list[i].index       = atoi(row[0]);
     node_db_list[i].id          = atoi(row[1]);
     strcpy(node_db_list[i].ipv6_addr,row[2]);
     strcpy(node_db_list[i].app_key,row[15]);
     strcpy(dst_ipv6addr_list[node_db_list[i].id], node_db_list[i].ipv6_addr);
+
+    /* if border router: always connected */
+    if (i==0) {
+        strcpy(node_db_list[i].connected,"Y");
+
+    /*if using simulation, use default IPv6 of border router */    
+#ifdef SIMULATION_BUILD  
+        strcpy(node_db_list[i].ipv6_addr, sim_gw_ipv6);
+#endif     
+
+    }        
 }
 #endif
 
@@ -1359,10 +1366,10 @@ static void update_sensor_data(int nodeid, env_struct_t env_db){
 
         printf("   + New async packet, extract data and update DB: \n");
         if (SHOW_FULL_DB == FALSE) {
-            printf("     ++ Temperature = \033[1;35m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
-            printf("     ++ Light       = \033[1;35m %.0f (lux) \033[0m\n", node_db_list[nodeid].sensor_db.light);
-            printf("     ++ Pressure    = \033[1;35m %.1f (hPa) \033[0m\n", node_db_list[nodeid].sensor_db.pressure);
-            printf("     ++ Humidity    = \033[1;35m %.2f (RH)  \033[0m\n", node_db_list[nodeid].sensor_db.humidity);
+            printf("     ++ Temperature = \033[1;33m %.1f (ºC)  \033[0m \n", node_db_list[nodeid].sensor_db.temperature );
+            printf("     ++ Light       = \033[1;33m %.0f (lux) \033[0m \n", node_db_list[nodeid].sensor_db.light);
+            printf("     ++ Pressure    = \033[1;33m %.1f (hPa) \033[0m \n", node_db_list[nodeid].sensor_db.pressure);
+            printf("     ++ Humidity    = \033[1;33m %.2f (RH)  \033[0m \n", node_db_list[nodeid].sensor_db.humidity);
         }
     } else {
         // no sensor shield
@@ -1527,14 +1534,16 @@ int main(int argc, char* argv[]) {
                     check_packet_for_node(&emergency_reply, emergency_node, node_db_list[emergency_node].encryption_phase);
 
                     if (emergency_reply.type == MSG_TYPE_ASYNC) {   
-                        printf(" - Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", emergency_status, emergency_node, buffer);
-                        printf("   + Cmd =\033[1;35m 0x%02X\033[0m, type =\033[1;35m 0x%02X\033[0m,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
-                    
                         time(&rawtime );
-                        timeinfo = localtime(&rawtime );
+                        timeinfo = localtime(&rawtime);
                         strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
                         strcpy (node_db_list[emergency_node].last_seen, str_time);
                         strcpy(node_db_list[emergency_node].connected,"Y");
+
+
+                        printf(" - [\033[1;35m%s\033[0m] Got an emergency msg (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", str_time, emergency_status, emergency_node, buffer);
+                        printf("   + Cmd =\033[1;35m 0x%02X\033[0m, type =\033[1;35m 0x%02X\033[0m,  seq =\033[1;35m %d \033[0m\n", emergency_reply.cmd, emergency_reply.type, emergency_reply.seq); 
+                    
 
                         if (emergency_reply.cmd == ASYNC_MSG_SENT) { // read sensor data here
                             printf("   + \033[1;35mEmergency data\033[0m (%d bytes): [",MAX_CMD_DATA_LEN);
@@ -1563,7 +1572,7 @@ int main(int argc, char* argv[]) {
                                 memcpy(node_db_list[emergency_node].last_emergency_msg, emergency_reply.arg, MAX_CMD_DATA_LEN);
 
                                 // data test UART here
-                                process_arduino_data(emergency_node, emergency_reply);
+                                //process_arduino_data(emergency_node, emergency_reply);
 
                                 // send report to server
                                 send_data_to_server(emergency_node);
@@ -1774,10 +1783,10 @@ static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
     printf("   + \033[1;35mSend data to server\033[0m [IP]:%d... DISABLED \n", REPORT_SERVER_PORT);  
-    printf("    ++ Temperature = \033[0;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
-    printf("Light = \033[0;33m%.0f (lux) \033[0m, ", node_db.sensor_db.light);
-    printf("Pressure = \033[0;33m%.1f (hPa) \033[0m, ", node_db.sensor_db.pressure);
-    printf("Humidity = \033[0;33m%.2f (RH) \033[0m\n", node_db.sensor_db.humidity);
+    printf("    ++ Temperature = \033[1;33m%.1f (ºC) 033[0m, ", node_db.sensor_db.temperature );
+    printf("Light = \033[1;33m%.0f (lux)\033[0m, ", node_db.sensor_db.light);
+    printf("Pressure = \033[1;33m%.1f (hPa)\033[0m, ", node_db.sensor_db.pressure);
+    printf("Humidity = \033[1;33m%.2f (RH)\033[0m\n", node_db.sensor_db.humidity);
     
 }
 

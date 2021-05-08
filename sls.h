@@ -13,9 +13,14 @@
 #define SLS_H_
 
 #define USING_SQL_SERVER_ENABLE	1
-
 #if (USING_SQL_SERVER_ENABLE)
 #define USING_SQL_SERVER
+#endif
+
+
+#define SIMULATION_BUILD_ENABLE	0
+#if (SIMULATION_BUILD_ENABLE)
+#define SIMULATION_BUILD
 #endif
 
 
@@ -27,6 +32,9 @@ enum {
 	SLS_NORMAL_PORT			= 3000,
 	SLS_EMERGENCY_PORT		= 3001,
 };
+
+enum {FALSE=0, TRUE=1,};
+
 
 /*---------------------------------------------------------------------------*/
 /* This is the UDP port used to receive data */
@@ -41,17 +49,17 @@ SLS_USING_HW = 1 : for compiling to CC2538dk: 2.4Ghz
 SLS_USING_HW = 2 : for compiling to CC2530DK: 2.4Ghz  
 SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 
-#define SLS_USING_HW		0
-
-#define CC2538DK_HAS_SENSOR  FALSE
+#define SLS_USING_HW	1
 
 
 #if (SLS_USING_HW==0)
 #define SLS_USING_SKY
 #endif
+
 #if (SLS_USING_HW==1)
 #define SLS_USING_CC2538DK
 #endif
+
 #if (SLS_USING_HW==2)
 #define SLS_USING_CC2530DK
 #endif
@@ -68,6 +76,14 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 #define RED			LEDS_ORANGE
 #define GREEN		LEDS_BLUE
 #define BLUE		LEDS_GREEN
+
+#define CC2538DK_UART_COMM 		FALSE
+
+#define CC2538DK_HAS_SENSOR  	TRUE
+#if (CC2538DK_HAS_SENSOR==TRUE)
+#define CC2538DK_HAS_SHIELD
+#endif
+
 #endif
 
 #ifdef SLS_USING_SKY
@@ -100,9 +116,6 @@ SLS_USING_HW = 3 : for compiling to CC1310, CC1350: Sub-1GHz  */
 #define MAX_CMD_DATA_LEN	54	
 #define MAX_CMD_LEN			sizeof(cmd_struct_t)
 
-enum {FALSE=0, TRUE=1,};
-
-#define CC2538DK_HAS_SENSOR  FALSE
 
 #define DEFAULT_EMERGENCY_STATUS TRUE
 #define EMERGENCY_TIME  30 		//seconds
@@ -110,8 +123,12 @@ enum {FALSE=0, TRUE=1,};
 
 #define SLS_USING_AES_128		0  //set this to enable AES-128 encryption
 #define POLY 0x8408
+
+#if (SLS_USING_AES_128==1)
 static uint8_t iv[16]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, \
                            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+
+#endif
 
 
 enum {	
