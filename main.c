@@ -60,11 +60,11 @@ Topology description:
 #define USING_LESS_RETRANS_CONF             TRUE
 
 #if (USING_LESS_RETRANS_CONF==TRUE)
-#define MAX_TIMEOUT             2          // seconds for a long chain topology 60 nodes: 10s
+#define MAX_TIMEOUT             5          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                5           // seconds: recommend 5s
-#define NUM_RETRANS_AUTHEN      1           // for authentication; default = 5
-#define NUM_RETRANS_SET_KEY     1           // for setting application key: default = 5
-#define NUM_RETRANS             1           // for commands: default = 5
+#define NUM_RETRANS_AUTHEN      2           // for authentication; default = 5
+#define NUM_RETRANS_SET_KEY     2           // for setting application key: default = 5
+#define NUM_RETRANS             2           // for commands: default = 5
 #else
 #define MAX_TIMEOUT             10          // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                8           // seconds: recommend 5s
@@ -268,9 +268,9 @@ void set_node_app_key (int node_id) {
     tx_cmd.err_code = 0;
     convert_str2array(node_db_list[node_id].app_key, byte_array, 16);
 
-    printf("\n - Set key for node %d, key = [", node_id);
+    printf("\n1. Set key for node \033[1;32m%d\033[0m (16 bytes), key = [", node_id);
     for (i = 0; i<16; i++) {
-        printf("%02X,", byte_array[i]);
+        printf("%02X", byte_array[i]);
     }
     printf("]\n");
 
@@ -683,7 +683,13 @@ int read_node_list(){
     } else {
         printf("SQL-DB error: reading node infor from config file....\n");    
         num_of_node =0;
-        ptr_file =fopen("node_list.txt","r");
+
+#ifdef SIMULATION_BUILD
+        ptr_file =fopen("cooja_node.txt","r");
+#else
+        ptr_file =fopen("node_list.txt","r");        
+#endif        
+
         if (!ptr_file)
             return 1;
         while (fgets(buf,1000, ptr_file)!=NULL) {
@@ -1313,9 +1319,11 @@ int num_of_active_node(){
 /*------------------------------------------------*/
 int find_node(char *ip_addr) {
     int i;
+    //printf("FIND %s\n", ip_addr);
     for (i=1; i<num_of_node; i++) {
+        //printf("i= %d; node_id = %d \n, %s \n",i, node_db_list[i].id, node_db_list[i].ipv6_addr);
         if (strcmp(node_db_list[i].ipv6_addr,ip_addr)==0) {
-            //printf("i= %d; node_id = %d \n",i, node_db_list[i].id);
+            ///printf(" FOUND i= %d; node_id = %d, addr = %s \n",i, node_db_list[i].id, node_db_list[i].ipv6_addr);
             return node_db_list[i].id;
         }
     }
@@ -1756,7 +1764,13 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     if (encryption_en==true) {
         encrypt_payload(cmd, key_arr);
     }    
-    printf(" - Make Tx packet for node %d...done; Encryption: %d \n", nodeid, encryption_en);
+
+    if (encryption_en==true) {
+       printf(" - Make Tx packet for node %d...done; Encryption: \033[0;31m ENABLED \033[0m \n", nodeid);        
+    }
+    else {
+       printf(" - Make Tx packet for node %d...done; Encryption: \033[0;31m DISABLED \033[0m \n", nodeid);                
+    }
 }
 
 //-------------------------------------------------------------------------------------------
@@ -1774,10 +1788,10 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
         decrypt_payload(cmd, key_arr);
     }
 
-    if (encryption_en==1)
-        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m ENABLED \033[0m\n", nodeid);
+    if (encryption_en==true)
+        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m ENABLED \033[0m \n", nodeid);
     else
-        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m DISABLED \033[0m\n", nodeid);
+        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m DISABLED \033[0m \n", nodeid);
 
     return check_crc_for_cmd(cmd);
 }
@@ -1786,7 +1800,7 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
-    printf("   + \033[1;35mSend data to server\033[0m [IP]:%d... DISABLED \n", REPORT_SERVER_PORT);  
+    printf("   + \033[1;35mSend data to server \033[0m[IP_ADDR:%d]... DISABLED \n", REPORT_SERVER_PORT);  
     printf("    ++ Temperature = \033[1;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
     printf("Light = \033[1;33m%.0f (lux)\033[0m, ", node_db.sensor_db.light);
     printf("Pressure = \033[1;33m%.1f (hPa)\033[0m, ", node_db.sensor_db.pressure);
@@ -1807,6 +1821,7 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     char str_time[80];
     int num_of_retrans, result;
 
+
     sin6len = sizeof(struct sockaddr_in6);
     strcpy(dst_ipv6addr,node_db_list[nodeid].ipv6_addr);
     sprintf(str_port,"%d",port);
@@ -1822,6 +1837,7 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     sin6.sin6_family = AF_INET6;
     sin6.sin6_addr = in6addr_any;
 
+
     status = bind(sock, (struct sockaddr *)&sin6, sin6len);
     if(-1 == status)
         perror("bind"), exit(1);
@@ -1835,6 +1851,8 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     sainfo.ai_protocol = IPPROTO_UDP;
     status = getaddrinfo(dst_ipv6addr, str_port, &sainfo, &psinfo);
 
+
+
     num_of_retrans = 0;
     while (num_of_retrans < retrans) {
         gettimeofday(&t0, 0);
@@ -1846,22 +1864,21 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
         //for testing CRC:
         //tx_cmd.seq = random();
 
-        status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
         printf("\n3. Forward REQUEST [retry=\033[1;35m%d\033[0m] (%d bytes) to node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m]:\033[1;32m%s\033[0m ", num_of_retrans, status, nodeid, dst_ipv6addr,str_port);        
-        if (status > 0)     {
-            printf("... done\n");        
-        } else {
-            printf("... ERROR\n");  
-        }    
+        status = sendto(sock, &tx_cmd, sizeof(tx_cmd), 0,(struct sockaddr *)psinfo->ai_addr, sin6len);
+        if (status > 0)     {   printf("... done  \n");   } 
+        else {                  printf("... ERROR \n");  }    
         printf("\n");
 
         /*wait for a reply */
         fd.fd = sock;
         fd.events = POLLIN;
         res = poll(&fd, 1, timeout_val*1000); // timeout
+
         if (res == -1) {
             printf(" - ERROR: GW forwarding command \n");
             num_of_retrans++;
+        
         } else if (res == 0) {
             printf("4. Time-out: GW forwarding command \n");
             rx_reply = tx_cmd;
@@ -1881,19 +1898,21 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             node_db_list[nodeid].delay = timedifference_msec(t0, t1);
 
             update_sql_row(nodeid);
-        } else {
-            // implies (fd.revents & POLLIN) != 0
-            rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0,(struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
+
+        } else {    // implies (fd.revents & POLLIN) != 0            
+            rev_sin6len = sizeof(rev_sin6);
+            rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0, (struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
             if (rev_bytes>=0) {
 
                 inet_ntop(AF_INET6, &rev_sin6.sin6_addr, buffer, sizeof(buffer));
                 result = find_node(buffer);                    
-                printf("4. Got REPLY (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n",rev_bytes, result, buffer);   
+
+                printf("4. Got REPLY (%d bytes) from node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] \n", rev_bytes, result, buffer);   
                 p = (char *) (&rev_buffer); 
                 cmdPtr = (cmd_struct_t *)p;
                 rx_reply = *cmdPtr;
-
                 //print_cmd(rx_reply);
+
                 check_packet_for_node(&rx_reply, nodeid, encryption_en);    
 
                 strcpy(node_db_list[nodeid].connected,"Y");
