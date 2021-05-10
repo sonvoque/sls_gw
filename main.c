@@ -20,8 +20,6 @@ Topology description:
 
 */
 
-
-
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -52,15 +50,13 @@ Topology description:
 #define SERVICE_PORT            21234	         /* hard-coded port number */
 #define REPORT_SERVER_PORT      21235            /* hard-coded port number */
 
-
-#define clear() printf("\033[H\033[J")
-
+#define SHOW_FULL_DB            TRUE
 
 /* if using simulation: set to TRUE to reduce the sim time */
-#define USING_LESS_RETRANS_CONF             TRUE
+#define USING_LESS_RETRANS_CONF             FALSE
 
 #if (USING_LESS_RETRANS_CONF==TRUE)
-#define MAX_TIMEOUT             5          // seconds for a long chain topology 60 nodes: 10s
+#define MAX_TIMEOUT             5           // seconds for a long chain topology 60 nodes: 10s
 #define TIME_OUT                5           // seconds: recommend 5s
 #define NUM_RETRANS_AUTHEN      2           // for authentication; default = 5
 #define NUM_RETRANS_SET_KEY     2           // for setting application key: default = 5
@@ -73,8 +69,7 @@ Topology description:
 #define NUM_RETRANS             5           // for commands: default = 5
 #endif
 
-
-#define SHOW_FULL_DB            FALSE
+#define clear() printf("\033[H\033[J")
 
 
 static  struct  sockaddr_in6 rev_sin6;
@@ -288,10 +283,10 @@ void set_node_app_key (int node_id) {
     if (res == -1) {
         printf(" - ERROR: set_node_app_key process \n");
     } else if (res == 0) {
-        printf(" - Set App Key for node %d [\033[1;32m%s\033[0m] failed \n", node_id, node_db_list[node_id].ipv6_addr); 
+        printf(" - Set App Key for node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] ... failed \n", node_id, node_db_list[node_id].ipv6_addr); 
     } else { 
         //node_db_list[node_id].encryption_phase = TRUE;
-        printf(" - Set App Key for node %d [\033[1;32m%s\033[0m] successful, encryption_phase = %d \n", node_id, node_db_list[node_id].ipv6_addr, 
+        printf(" - Set App Key for node \033[1;32m%d\033[0m [\033[1;32m%s\033[0m] ... successful, encryption_phase = %d \n", node_id, node_db_list[node_id].ipv6_addr, 
                                                                                     node_db_list[node_id].encryption_phase);   
     }
 }
@@ -843,7 +838,7 @@ void run_node_discovery(){
     for (i = 1; i < num_of_node; i++) {
         node_db_list[i].challenge_code = gen_random_num();
         node_db_list[i].challenge_code_res = hash(node_db_list[i].challenge_code);
-        printf("\n1. Send challenge_code = 0x%04X to node %d\n",node_db_list[i].challenge_code, i );
+        printf("\n1. Send challenge_code [0x%04X] to node \033[1;32m%d\033[0m \n",node_db_list[i].challenge_code, i );
         printf(" - Expected challenge_code_res = 0x%04X \n",node_db_list[i].challenge_code_res);
 
         gettimeofday(&t0, 0);
@@ -1766,10 +1761,10 @@ void make_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_en
     }    
 
     if (encryption_en==true) {
-       printf(" - Make Tx packet for node %d...done; Encryption: \033[0;31m ENABLED \033[0m \n", nodeid);        
+       printf(" - Make Tx packet for node %d...done; Encryption:\033[0;31m ENABLED \033[0m \n", nodeid);        
     }
     else {
-       printf(" - Make Tx packet for node %d...done; Encryption: \033[0;31m DISABLED \033[0m \n", nodeid);                
+       printf(" - Make Tx packet for node %d...done; Encryption:\033[0;31m DISABLED \033[0m \n", nodeid);                
     }
 }
 
@@ -1800,7 +1795,7 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
 static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
-    printf("   + \033[1;35mSend data to server \033[0m[IP_ADDR:%d]... DISABLED \n", REPORT_SERVER_PORT);  
+    printf("   + \033[1;35mSend data to server \033[0m[IP_ADDR:%d]...\033[0;31m DISABLED \033[0m \n", REPORT_SERVER_PORT);  
     printf("    ++ Temperature = \033[1;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
     printf("Light = \033[1;33m%.0f (lux)\033[0m, ", node_db.sensor_db.light);
     printf("Pressure = \033[1;33m%.1f (hPa)\033[0m, ", node_db.sensor_db.pressure);
@@ -1837,7 +1832,6 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     sin6.sin6_family = AF_INET6;
     sin6.sin6_addr = in6addr_any;
 
-
     status = bind(sock, (struct sockaddr *)&sin6, sin6len);
     if(-1 == status)
         perror("bind"), exit(1);
@@ -1851,7 +1845,7 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
     sainfo.ai_protocol = IPPROTO_UDP;
     status = getaddrinfo(dst_ipv6addr, str_port, &sainfo, &psinfo);
 
-
+    rev_sin6len = sizeof(rev_sin6);
 
     num_of_retrans = 0;
     while (num_of_retrans < retrans) {
@@ -1884,6 +1878,7 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             rx_reply = tx_cmd;
 
             num_of_retrans++;
+
             /*update local DB*/
             //node_db_list[nodeid].num_timeout++;
             strcpy(node_db_list[nodeid].connected,"N");
@@ -1900,7 +1895,6 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
             update_sql_row(nodeid);
 
         } else {    // implies (fd.revents & POLLIN) != 0            
-            rev_sin6len = sizeof(rev_sin6);
             rev_bytes = recvfrom((int)sock, rev_buffer, MAXBUF, 0, (struct sockaddr *)(&rev_sin6), (socklen_t *) &rev_sin6len);
             if (rev_bytes>=0) {
 
@@ -1919,10 +1913,12 @@ static int ip6_send_cmd(int nodeid, int port, int retrans, bool encryption_en) {
                 node_db_list[nodeid].last_err_code = rx_reply.err_code;
                 node_db_list[nodeid].num_of_retrans = num_of_retrans;
 
-                time(&rawtime );
+                time(&rawtime );  
                 timeinfo = localtime ( &rawtime );
                 strftime(str_time,80,"%x-%H:%M:%S", timeinfo);
                 strcpy (node_db_list[nodeid].last_seen, str_time);
+                strcpy (node_db_list[0].last_seen, str_time);   // update Router last seen time = last seen time of last packet received
+
 
                 /*get the execution delay */    
                 gettimeofday(&t1, 0);
