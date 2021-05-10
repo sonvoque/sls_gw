@@ -525,7 +525,7 @@ void show_local_db() {
         printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-------------------|-----|--------------|----------------|--------|------|-------|-----|--------|-----|--------|-----|\n");
         for(i = 0; i < num_of_node; i++) {
             if (i>0) {
-                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
+                printf("| %2d |\033[1;33m %24s \033[0m|\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
@@ -533,7 +533,7 @@ void show_local_db() {
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr,
                     node_db_list[i].sensor_db.temperature, (uint16_t)node_db_list[i].sensor_db.light, node_db_list[i].sensor_db.pressure, node_db_list[i].sensor_db.humidity);  
                 } else {
-                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
+                printf("| %2d |\033[1;33m %24s \033[0m|\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d| %17s |%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\033[1;35m%8.02f\033[0m|\033[1;35m%5d\033[0m|\033[1;35m%8.1f\033[0m|\033[1;35m%5.2f\033[0m|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].last_seen, node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
@@ -552,14 +552,14 @@ void show_local_db() {
         printf("|----|--------------------------|----|-----|-----|-----|-----|-----|-----|--------------|----------------|--------|------|-------|-----|\n");
         for(i = 0; i < num_of_node; i++) {
             if (i>0) {
-                printf("| %2d | %24s |\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+                printf("| %2d |\033[1;33m %24s \033[0m|\033[1;32m%2s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
                     node_db_list[i].num_emergency_msg, node_db_list[i].async_seq, node_db_list[i].async_prr, node_db_list[i].last_err_code,
                     (uint8_t) node_db_list[i].next_hop_addr[14], (uint8_t)node_db_list[i].next_hop_addr[15], node_db_list[i].delay, node_db_list[i].rdr);  
                 } else {
-                printf("| %2d | %24s |\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
+                printf("| %2d |\033[1;33m %24s \033[0m|\033[1;32m*%1s/%1d\033[0m|%5d|%5d|%5d| 0x%02X|%5d|%5d|%4d/%5u/%3X|%4d(%4d)/%5.1f| 0x%04X | _%02x%02x|%7.02f|%5.1f|\n",node_db_list[i].id,
                     node_db_list[i].ipv6_addr, node_db_list[i].connected,node_db_list[i].authenticated, node_db_list[i].num_req, 
                     node_db_list[i].num_rep, node_db_list[i].num_timeout, node_db_list[i].last_cmd, node_db_list[i].num_of_retrans,
                     node_db_list[i].channel_id, node_db_list[i].rssi, node_db_list[i].lqi, node_db_list[i].tx_power, 
@@ -1774,7 +1774,11 @@ bool check_packet_for_node(cmd_struct_t *cmd, uint16_t nodeid, bool encryption_e
         decrypt_payload(cmd, key_arr);
     }
 
-    printf(" - Check RX packet for node %d... done;  Decryption: %d \n", nodeid, encryption_en);
+    if (encryption_en==1)
+        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m ENABLED \033[0m\n", nodeid);
+    else
+        printf(" - Check RX packet for node %d... done;  Decryption:\033[0;31m DISABLED \033[0m\n", nodeid);
+
     return check_crc_for_cmd(cmd);
 }
 
@@ -1783,7 +1787,7 @@ static void send_data_to_server(int node_id) {
     node_db = node_db_list[node_id];  
     
     printf("   + \033[1;35mSend data to server\033[0m [IP]:%d... DISABLED \n", REPORT_SERVER_PORT);  
-    printf("    ++ Temperature = \033[1;33m%.1f (ºC) 033[0m, ", node_db.sensor_db.temperature );
+    printf("    ++ Temperature = \033[1;33m%.1f (ºC) \033[0m, ", node_db.sensor_db.temperature );
     printf("Light = \033[1;33m%.0f (lux)\033[0m, ", node_db.sensor_db.light);
     printf("Pressure = \033[1;33m%.1f (hPa)\033[0m, ", node_db.sensor_db.pressure);
     printf("Humidity = \033[1;33m%.2f (RH)\033[0m\n", node_db.sensor_db.humidity);
