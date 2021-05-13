@@ -153,6 +153,10 @@ static void update_sensor_data(int nodeid, env_struct_t env_db);
 static void show_network_topo();
 static void send_data_to_server(int node_id); 
 
+static void check_border_router();
+
+
+
 struct timeval t0, t1;
 time_t rawtime;
 struct tm *timeinfo;
@@ -698,8 +702,18 @@ int read_node_list(){
     }
     printf("\n\033[1;32mI. READ NODE LIST... DONE. Num of nodes: %d  \033[0m\n",num_of_node);
     
+    check_border_router();
+
     show_local_db();
     return 0;
+}
+
+
+void check_border_router(){
+    char pingCmd[100] = {'\0'};
+    sprintf( pingCmd, "%s %s", "ping6 -q -c 2", node_db_list[0].ipv6_addr);
+    printf( "Check border router:\033[1;33m %s \033[0m\n", node_db_list[0].ipv6_addr);
+    system(pingCmd );
 }
 
 /*------------------------------------------------*/
