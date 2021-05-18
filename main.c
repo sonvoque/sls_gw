@@ -35,6 +35,7 @@ Topology description:
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
+#include <ifaddrs.h>
 
 //#ifdef USING_SQL_SERVER
 #include <mysql/mysql.h>
@@ -154,6 +155,7 @@ static void show_network_topo();
 static void send_data_to_server(int node_id); 
 
 static void check_border_router();
+static void check_ip_interface();
 
 
 
@@ -703,18 +705,62 @@ int read_node_list(){
     printf("\n\033[1;32mI. READ NODE LIST... DONE. Num of nodes: %d  \033[0m\n",num_of_node);
     
     check_border_router();
+    check_ip_interface();
 
     show_local_db();
     return 0;
 }
 
 
+/*------------------------------------------------*/
 void check_border_router(){
     char pingCmd[100] = {'\0'};
     sprintf( pingCmd, "%s %s", "ping6 -q -c 2", node_db_list[0].ipv6_addr);
     printf( "Check border router:\033[1;33m %s \033[0m\n", node_db_list[0].ipv6_addr);
     system(pingCmd );
 }
+
+/*------------------------------------------------*/
+void check_ip_interface(){
+    struct ifaddrs *ifaddr, *ifa;
+    int family, s;
+    char host[NI_MAXHOST];
+
+    printf( "Check IP interfaces: \n");
+    if (getifaddrs(&ifaddr) == -1)    {
+        perror("getifaddrs");
+        //exit(EXIT_FAILURE);
+    }
+
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL)
+            continue;  
+
+        s=getnameinfo(ifa->ifa_addr,sizeof(struct sockaddr_in),host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+
+        if((strcmp(ifa->ifa_name,"ens33")==0)&&(ifa->ifa_addr->sa_family==AF_INET)) {
+            if (s != 0) {
+                printf("getnameinfo() failed: %s\n", gai_strerror(s));
+                //exit(EXIT_FAILURE);
+            }
+            printf("- Interface: <\033[1;33m%s\033[0m> Address: \033[1;33m%s\033[0m \n",ifa->ifa_name, host);
+        }
+
+        if((strcmp(ifa->ifa_name,"lo")==0)&&(ifa->ifa_addr->sa_family==AF_INET)) {
+            if (s != 0) {
+                printf("getnameinfo() failed: %s\n", gai_strerror(s));
+                //exit(EXIT_FAILURE);
+            }
+            printf("- Interface: <\033[1;33m%s\033[0m> Address: \033[1;33m%s\033[0m \n",ifa->ifa_name, host);
+        }
+
+    }
+
+    freeifaddrs(ifaddr);
+    //exit(EXIT_SUCCESS);
+}
+
 
 /*------------------------------------------------*/
 bool is_broadcast_command(cmd_struct_t cmd) {
